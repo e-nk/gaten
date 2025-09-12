@@ -3,24 +3,66 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/navigation/navbar";
-import { BookOpen, Plus } from "lucide-react";
+import { AdminGuard } from "@/components/auth/admin-guard";
+import { trpc } from "@/trpc/provider";
+import { useSession } from "next-auth/react";
+import { BookOpen, Plus, Edit, Settings } from "lucide-react";
 
-export default function AdminCoursesPage() {
+function AdminCoursesContent() {
+  const { data: session } = useSession();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    categoryId: ''
+    categoryId: '',
+    level: 'BEGINNER' as const
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // We'll implement tRPC mutation here
-    console.log('Creating course:', formData);
-    setShowCreateForm(false);
-    setFormData({ title: '', description: '', categoryId: '' });
-  };
+  // tRPC queries - pass session data
+  const { data: courses, refetch: refetchCourses } = trpc.getAdminCourses.useQuery(
+    {
+      creatorId: session?.user?.id || '',
+      userRole: session?.user?.role || '',
+    },
+    {
+      enabled: !!session?.user?.id,
+    }
+  );
+  
+  const { data: categories } = trpc.getCategories.useQuery();
+  
+  // tRPC mutations
+  const createCourseMutation = trpc.createCourse.useMutation({
+    onSuccess: () => {
+      refetchCourses();
+      setShowCreateForm(false);
+      setFormData({ title: '', description: '', categoryId: '', level: 'BEGINNER' });
+    },
+    onError: (error) => {
+      alert(error.message);
+    }
+  });
 
+		const handleSubmit = async (e: React.FormEvent) => {
+			e.preventDefault();
+			if (!session?.user?.id || !session?.user?.role) return;
+
+			// Prepare form data - don't send empty categoryId
+			const submitData: any = {
+				title: formData.title,
+				description: formData.description,
+				level: formData.level,
+				creatorId: session.user.id,
+				userRole: session.user.role,
+			};
+
+			// Only include categoryId if one is selected
+			if (formData.categoryId && formData.categoryId.trim() !== '') {
+				submitData.categoryId = formData.categoryId;
+			}
+
+			createCourseMutation.mutate(submitData);
+		};
   return (
     <div className="min-h-screen bg-school-primary-nyanza">
       <Navbar />
@@ -83,6 +125,21 @@ export default function AdminCoursesPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-school-primary-blue mb-1">
+                    Level
+                  </label>
+                  <select
+                    value={formData.level}
+                    onChange={(e) => setFormData(prev => ({ ...prev, level: e.target.value as any }))}
+                    className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+                  >
+                    <option value="BEGINNER">Beginner</option>
+                    <option value="INTERMEDIATE">Intermediate</option>
+                    <option value="ADVANCED">Advanced</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-school-primary-blue mb-1">
                     Category
                   </label>
                   <select
@@ -91,18 +148,21 @@ export default function AdminCoursesPage() {
                     className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
                   >
                     <option value="">Select a category</option>
-                    <option value="programming">Programming</option>
-                    <option value="design">Design</option>
-                    <option value="business">Business</option>
+                    {categories?.map(category => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 <div className="flex space-x-3 pt-4">
                   <Button
                     type="submit"
+                    disabled={createCourseMutation.isPending}
                     className="flex-1 bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
                   >
-                    Create Course
+                    {createCourseMutation.isPending ? 'Creating...' : 'Create Course'}
                   </Button>
                   <Button
                     type="button"
@@ -120,60 +180,83 @@ export default function AdminCoursesPage() {
 
         {/* Courses Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Sample Course Card */}
-          <div className="bg-white rounded-lg border border-school-primary-paledogwood p-6 hover:shadow-lg transition-shadow">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="font-semibold text-school-primary-blue mb-1">
-                  Introduction to Programming
-                </h3>
-                <p className="text-sm text-gray-600">
-                  Learn the basics of programming
-                </p>
+          {courses?.map(course => (
+            <div key={course.id} className="bg-white rounded-lg border border-school-primary-paledogwood p-6 hover:shadow-lg transition-shadow">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-school-primary-blue mb-1">
+                    {course.title}
+                  </h3>
+                  <p className="text-sm text-gray-600 line-clamp-2">
+                    {course.description || 'No description provided'}
+                  </p>
+                  {course.category && (
+                    <span className="inline-block mt-2 px-2 py-1 bg-school-primary-nyanza text-school-primary-blue text-xs rounded">
+                      {course.category.name}
+                    </span>
+                  )}
+                </div>
+                <span className={`px-2 py-1 text-xs rounded ml-2 ${
+                  course.published 
+                    ? 'bg-green-100 text-green-600' 
+                    : 'bg-yellow-100 text-yellow-600'
+                }`}>
+                  {course.published ? 'Published' : 'Draft'}
+                </span>
               </div>
-              <span className="px-2 py-1 bg-school-primary-nyanza text-school-primary-blue text-xs rounded">
-                Draft
-              </span>
-            </div>
 
-            <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-              <span>0 students</span>
-              <span>0 modules</span>
-            </div>
+              <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
+                <span>{course._count.enrollments} students</span>
+                <span>{course._count.modules} modules</span>
+                <span className="capitalize">{course.level.toLowerCase()}</span>
+              </div>
 
-            <div className="flex space-x-2">
-              <Button size="sm" variant="outline" className="flex-1">
-                Edit
-              </Button>
-              <Button size="sm" className="flex-1 bg-school-primary-blue hover:bg-school-primary-blue/90 text-white">
-                Manage
-              </Button>
+              <div className="flex space-x-2">
+                <Button size="sm" variant="outline" className="flex-1">
+                  <Edit className="w-4 h-4 mr-1" />
+                  Edit
+                </Button>
+                <Button size="sm" className="flex-1 bg-school-primary-blue hover:bg-school-primary-blue/90 text-white">
+                  <Settings className="w-4 h-4 mr-1" />
+                  Manage
+                </Button>
+              </div>
             </div>
-          </div>
+          ))}
 
           {/* Empty State */}
-          <div className="col-span-full">
-            <div className="text-center py-12 bg-white rounded-lg border border-school-primary-paledogwood">
-              <div className="w-16 h-16 bg-school-primary-nyanza rounded-full flex items-center justify-center mx-auto mb-4">
-                <BookOpen className="w-8 h-8 text-school-primary-blue" />
+          {(!courses || courses.length === 0) && (
+            <div className="col-span-full">
+              <div className="text-center py-12 bg-white rounded-lg border border-school-primary-paledogwood">
+                <div className="w-16 h-16 bg-school-primary-nyanza rounded-full flex items-center justify-center mx-auto mb-4">
+                  <BookOpen className="w-8 h-8 text-school-primary-blue" />
+                </div>
+                <h3 className="text-lg font-medium text-school-primary-blue mb-2">
+                  No courses yet
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  Create your first course to get started
+                </p>
+                <Button
+                  onClick={() => setShowCreateForm(true)}
+                  className="bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Your First Course
+                </Button>
               </div>
-              <h3 className="text-lg font-medium text-school-primary-blue mb-2">
-                No courses yet
-              </h3>
-              <p className="text-gray-600 mb-4">
-                Create your first course to get started
-              </p>
-              <Button
-                onClick={() => setShowCreateForm(true)}
-                className="bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Create Your First Course
-              </Button>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminCoursesPage() {
+  return (
+    <AdminGuard>
+      <AdminCoursesContent />
+    </AdminGuard>
   );
 }
