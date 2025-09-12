@@ -280,10 +280,14 @@ function AdminCoursesContent() {
                     </>
                   )}
                 </Button>
-                <Button size="sm" variant="outline" className="flex-1">
-                  <Edit className="w-4 h-4 mr-1" />
-                  Edit
-                </Button>
+								<Button 
+									size="sm" 
+									className="flex-1 bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+									onClick={() => window.location.href = `/admin/courses/${course.id}`}
+								>
+									<Settings className="w-4 h-4 mr-1" />
+									Manage
+								</Button>
               </div>
             </div>
           ))}

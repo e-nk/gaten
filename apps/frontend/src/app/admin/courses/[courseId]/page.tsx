@@ -1,0 +1,483 @@
+"use client";
+
+import { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Navbar } from "@/components/navigation/navbar";
+import { AdminGuard } from "@/components/auth/admin-guard";
+import { trpc } from "@/trpc/provider";
+import { useSession } from "next-auth/react";
+import { 
+  ArrowLeft, 
+  Plus, 
+  BookOpen, 
+  Play, 
+  FileText, 
+  PenTool, 
+  HelpCircle,
+  Edit,
+  Trash2,
+  GripVertical
+} from "lucide-react";
+
+function CourseContentPage() {
+  const params = useParams();
+  const router = useRouter();
+  const { data: session } = useSession();
+  const courseId = params.courseId as string;
+
+  const [showModuleForm, setShowModuleForm] = useState(false);
+  const [showLessonForm, setShowLessonForm] = useState<string | null>(null);
+  const [moduleFormData, setModuleFormData] = useState({
+    title: '',
+    description: '',
+  });
+  const [lessonFormData, setLessonFormData] = useState({
+    title: '',
+    description: '',
+    type: 'TEXT' as const,
+    content: '',
+    estimatedDuration: 0,
+  });
+
+  // tRPC queries
+  const { data: course } = trpc.getAdminCourses.useQuery(
+    {
+      creatorId: session?.user?.id || '',
+      userRole: session?.user?.role || '',
+    },
+    {
+      enabled: !!session?.user?.id,
+      select: (courses) => courses.find(c => c.id === courseId),
+    }
+  );
+
+  const { data: modules, refetch: refetchModules } = trpc.getCourseModules.useQuery(
+    { courseId },
+    { enabled: !!courseId }
+  );
+
+  // tRPC mutations
+  const createModuleMutation = trpc.createModule.useMutation({
+    onSuccess: () => {
+      refetchModules();
+      setShowModuleForm(false);
+      setModuleFormData({ title: '', description: '' });
+    },
+    onError: (error) => {
+      alert(error.message);
+    }
+  });
+
+  const createLessonMutation = trpc.createLesson.useMutation({
+    onSuccess: () => {
+      refetchModules();
+      setShowLessonForm(null);
+      setLessonFormData({ title: '', description: '', type: 'TEXT', content: '', estimatedDuration: 0 });
+    },
+    onError: (error) => {
+      alert(error.message);
+    }
+  });
+
+  const handleCreateModule = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!session?.user?.id || !session?.user?.role) return;
+
+    const nextOrder = modules ? modules.length : 0;
+
+    createModuleMutation.mutate({
+      ...moduleFormData,
+      courseId,
+      order: nextOrder,
+      creatorId: session.user.id,
+      userRole: session.user.role,
+    });
+  };
+
+  const handleCreateLesson = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!session?.user?.id || !session?.user?.role || !showLessonForm) return;
+
+    const module = modules?.find(m => m.id === showLessonForm);
+    const nextOrder = module ? module.lessons.length : 0;
+
+    createLessonMutation.mutate({
+      ...lessonFormData,
+      moduleId: showLessonForm,
+      order: nextOrder,
+      creatorId: session.user.id,
+      userRole: session.user.role,
+    });
+  };
+
+  const getLessonIcon = (type: string) => {
+    switch (type) {
+      case 'VIDEO': return <Play className="w-4 h-4" />;
+      case 'TEXT': return <FileText className="w-4 h-4" />;
+      case 'QUIZ': return <HelpCircle className="w-4 h-4" />;
+      case 'ASSIGNMENT': return <PenTool className="w-4 h-4" />;
+      default: return <BookOpen className="w-4 h-4" />;
+    }
+  };
+
+  const getLessonTypeColor = (type: string) => {
+    switch (type) {
+      case 'VIDEO': return 'text-blue-600 bg-blue-50';
+      case 'TEXT': return 'text-gray-600 bg-gray-50';
+      case 'QUIZ': return 'text-purple-600 bg-purple-50';
+      case 'ASSIGNMENT': return 'text-orange-600 bg-orange-50';
+      default: return 'text-gray-600 bg-gray-50';
+    }
+  };
+
+  if (!course) {
+    return (
+      <div className="min-h-screen bg-school-primary-nyanza">
+        <Navbar />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-school-primary-blue">Course not found</h1>
+            <Button onClick={() => router.back()} className="mt-4" variant="outline">
+              Go Back
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-school-primary-nyanza">
+      <Navbar />
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center">
+            <Button
+              onClick={() => router.push('/admin/courses')}
+              variant="outline"
+              size="sm"
+              className="mr-4"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Courses
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold text-school-primary-blue mb-2">
+                {course.title}
+              </h1>
+              <p className="text-gray-600">
+                Manage course content and structure
+              </p>
+            </div>
+          </div>
+          
+          <Button
+            onClick={() => setShowModuleForm(true)}
+            className="bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Module
+          </Button>
+        </div>
+
+        {/* Course Info */}
+        <div className="bg-white rounded-lg border border-school-primary-paledogwood p-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <div className="text-2xl font-bold text-school-primary-blue">
+                {modules?.length || 0}
+              </div>
+              <div className="text-sm text-gray-600">Modules</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-school-primary-blue">
+                {modules?.reduce((total, m) => total + m.lessons.length, 0) || 0}
+              </div>
+              <div className="text-sm text-gray-600">Lessons</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-school-primary-blue">
+                {course._count.enrollments}
+              </div>
+              <div className="text-sm text-gray-600">Students</div>
+            </div>
+            <div>
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                course.published 
+                  ? 'bg-green-100 text-green-600' 
+                  : 'bg-yellow-100 text-yellow-600'
+              }`}>
+                {course.published ? 'Published' : 'Draft'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Create Module Form */}
+        {showModuleForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h2 className="text-xl font-bold text-school-primary-blue mb-4">
+                Create New Module
+              </h2>
+              
+              <form onSubmit={handleCreateModule} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-school-primary-blue mb-1">
+                    Module Title *
+                  </label>
+                  <input
+                    type="text"
+                    value={moduleFormData.title}
+                    onChange={(e) => setModuleFormData(prev => ({ ...prev, title: e.target.value }))}
+                    className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+                    required
+                    placeholder="Enter module title"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-school-primary-blue mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={moduleFormData.description}
+                    onChange={(e) => setModuleFormData(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue h-24 resize-none"
+                    placeholder="Describe this module"
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <Button
+                    type="submit"
+                    disabled={createModuleMutation.isPending}
+                    className="flex-1 bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+                  >
+                    {createModuleMutation.isPending ? 'Creating...' : 'Create Module'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowModuleForm(false)}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Create Lesson Form */}
+        {showLessonForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h2 className="text-xl font-bold text-school-primary-blue mb-4">
+                Create New Lesson
+              </h2>
+              
+              <form onSubmit={handleCreateLesson} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-school-primary-blue mb-1">
+                    Lesson Title *
+                  </label>
+                  <input
+                    type="text"
+                    value={lessonFormData.title}
+                    onChange={(e) => setLessonFormData(prev => ({ ...prev, title: e.target.value }))}
+                    className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+                    required
+                    placeholder="Enter lesson title"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-school-primary-blue mb-1">
+                    Lesson Type
+                  </label>
+                  <select
+                    value={lessonFormData.type}
+                    onChange={(e) => setLessonFormData(prev => ({ ...prev, type: e.target.value as any }))}
+                    className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+                  >
+                    <option value="TEXT">Text Content</option>
+                    <option value="VIDEO">Video</option>
+                    <option value="QUIZ">Quiz</option>
+                    <option value="ASSIGNMENT">Assignment</option>
+                    <option value="INTERACTIVE">Interactive</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-school-primary-blue mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={lessonFormData.description}
+                    onChange={(e) => setLessonFormData(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue h-20 resize-none"
+                    placeholder="Describe this lesson"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-school-primary-blue mb-1">
+                    Estimated Duration (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={lessonFormData.estimatedDuration}
+                    onChange={(e) => setLessonFormData(prev => ({ ...prev, estimatedDuration: parseInt(e.target.value) || 0 }))}
+                    className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+                    placeholder="0"
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <Button
+                    type="submit"
+                    disabled={createLessonMutation.isPending}
+                    className="flex-1 bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+                  >
+                    {createLessonMutation.isPending ? 'Creating...' : 'Create Lesson'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowLessonForm(null)}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modules and Lessons */}
+        <div className="space-y-6">
+          {modules?.map((module, moduleIndex) => (
+            <div key={module.id} className="bg-white rounded-lg border border-school-primary-paledogwood overflow-hidden">
+              {/* Module Header */}
+              <div className="bg-gray-50 px-6 py-4 border-b border-school-primary-paledogwood">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <GripVertical className="w-4 h-4 text-gray-400 mr-3" />
+                    <div>
+                      <h3 className="font-semibold text-school-primary-blue">
+                        Module {moduleIndex + 1}: {module.title}
+                      </h3>
+                      {module.description && (
+                        <p className="text-sm text-gray-600 mt-1">{module.description}</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-500">
+                      {module.lessons.length} lessons
+                    </span>
+                    <Button
+                      onClick={() => setShowLessonForm(module.id)}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add Lesson
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lessons */}
+              <div className="divide-y divide-gray-100">
+                {module.lessons.map((lesson, lessonIndex) => (
+                  <div key={lesson.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
+                    <div className="flex items-center">
+                      <GripVertical className="w-4 h-4 text-gray-400 mr-3" />
+                      <div className={`p-2 rounded ${getLessonTypeColor(lesson.type)} mr-3`}>
+                        {getLessonIcon(lesson.type)}
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-school-primary-blue">
+                          {lessonIndex + 1}. {lesson.title}
+                        </h4>
+                        <div className="flex items-center text-sm text-gray-500 mt-1">
+                          <span className="capitalize">{lesson.type.toLowerCase()}</span>
+                          {lesson.estimatedDuration && (
+                            <>
+                              <span className="mx-2">•</span>
+                              <span>{lesson.estimatedDuration} min</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <Button size="sm" variant="outline">
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                {module.lessons.length === 0 && (
+                  <div className="px-6 py-8 text-center text-gray-500">
+                    <BookOpen className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                    <p>No lessons in this module yet</p>
+                    <Button
+                      onClick={() => setShowLessonForm(module.id)}
+                      size="sm"
+                      variant="outline"
+                      className="mt-2"
+                    >
+                      Add First Lesson
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {/* Empty State */}
+          {(!modules || modules.length === 0) && (
+            <div className="text-center py-12 bg-white rounded-lg border border-school-primary-paledogwood">
+              <div className="w-16 h-16 bg-school-primary-nyanza rounded-full flex items-center justify-center mx-auto mb-4">
+                <BookOpen className="w-8 h-8 text-school-primary-blue" />
+              </div>
+              <h3 className="text-lg font-medium text-school-primary-blue mb-2">
+                No modules yet
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Start building your course by creating the first module
+              </p>
+              <Button
+                onClick={() => setShowModuleForm(true)}
+                className="bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create First Module
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function CourseContentPageWrapper() {
+  return (
+    <AdminGuard>
+      <CourseContentPage />
+    </AdminGuard>
+  );
+}
