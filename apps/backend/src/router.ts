@@ -1,13 +1,20 @@
 import { router, publicProcedure } from './trpc';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client'; // Now uses default location
 
-// Create Prisma client directly in backend
-const db = new PrismaClient();
+let db: PrismaClient | null = null;
+
+const getDb = () => {
+  if (!db) {
+    db = new PrismaClient();
+  }
+  return db;
+};
 
 export const appRouter = router({
   healthCheck: publicProcedure.query(async () => {
     try {
-      await db.$queryRaw`SELECT 1`;
+      const database = getDb();
+      await database.$queryRaw`SELECT 1`;
       return { 
         status: 'tRPC is working!', 
         database: 'Connected' 
