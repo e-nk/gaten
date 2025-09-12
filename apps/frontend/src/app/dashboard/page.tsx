@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/navigation/navbar";
 import { SessionDebug } from "@/components/debug/session-debug";
+import { BookOpen, Search, Users, BarChart3, Settings, Award } from "lucide-react";
 import Link from "next/link";
 
 export default function Dashboard() {
@@ -48,14 +49,14 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Rest of your dashboard content */}
+        {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {session.user?.role === 'ADMIN' ? (
             <>
               <Link href="/admin/courses" className="block">
                 <div className="bg-white p-6 rounded-lg border border-school-primary-paledogwood hover:shadow-lg transition-shadow cursor-pointer">
                   <div className="w-12 h-12 bg-school-primary-blue rounded-lg flex items-center justify-center mb-4">
-                    <div className="w-6 h-6 bg-white rounded"></div>
+                    <BookOpen className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="font-semibold text-school-primary-blue mb-2">
                     Manage Courses
@@ -68,7 +69,7 @@ export default function Dashboard() {
 
               <div className="bg-white p-6 rounded-lg border border-school-primary-paledogwood hover:shadow-lg transition-shadow cursor-pointer">
                 <div className="w-12 h-12 bg-school-primary-pink rounded-lg flex items-center justify-center mb-4">
-                  <div className="w-6 h-6 bg-white rounded"></div>
+                  <Users className="w-6 h-6 text-white" />
                 </div>
                 <h3 className="font-semibold text-school-primary-blue mb-2">
                   Manage Users
@@ -80,7 +81,7 @@ export default function Dashboard() {
 
               <div className="bg-white p-6 rounded-lg border border-school-primary-paledogwood hover:shadow-lg transition-shadow cursor-pointer">
                 <div className="w-12 h-12 bg-school-primary-puce rounded-lg flex items-center justify-center mb-4">
-                  <div className="w-6 h-6 bg-white rounded"></div>
+                  <BarChart3 className="w-6 h-6 text-white" />
                 </div>
                 <h3 className="font-semibold text-school-primary-blue mb-2">
                   Analytics
@@ -95,7 +96,7 @@ export default function Dashboard() {
               <Link href="/courses" className="block">
                 <div className="bg-white p-6 rounded-lg border border-school-primary-paledogwood hover:shadow-lg transition-shadow cursor-pointer">
                   <div className="w-12 h-12 bg-school-primary-blue rounded-lg flex items-center justify-center mb-4">
-                    <div className="w-6 h-6 bg-white rounded"></div>
+                    <Search className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="font-semibold text-school-primary-blue mb-2">
                     Browse Courses
@@ -109,7 +110,7 @@ export default function Dashboard() {
               <Link href="/my-learning" className="block">
                 <div className="bg-white p-6 rounded-lg border border-school-primary-paledogwood hover:shadow-lg transition-shadow cursor-pointer">
                   <div className="w-12 h-12 bg-school-primary-pink rounded-lg flex items-center justify-center mb-4">
-                    <div className="w-6 h-6 bg-white rounded"></div>
+                    <BookOpen className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="font-semibold text-school-primary-blue mb-2">
                     My Learning
@@ -122,7 +123,7 @@ export default function Dashboard() {
 
               <div className="bg-white p-6 rounded-lg border border-school-primary-paledogwood hover:shadow-lg transition-shadow cursor-pointer">
                 <div className="w-12 h-12 bg-school-primary-puce rounded-lg flex items-center justify-center mb-4">
-                  <div className="w-6 h-6 bg-white rounded"></div>
+                  <Award className="w-6 h-6 text-white" />
                 </div>
                 <h3 className="font-semibold text-school-primary-blue mb-2">
                   Achievements

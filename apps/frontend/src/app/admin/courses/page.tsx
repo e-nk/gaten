@@ -6,7 +6,7 @@ import { Navbar } from "@/components/navigation/navbar";
 import { AdminGuard } from "@/components/auth/admin-guard";
 import { trpc } from "@/trpc/provider";
 import { useSession } from "next-auth/react";
-import { BookOpen, Plus, Edit, Settings } from "lucide-react";
+import { BookOpen, Plus, Edit, Settings, Eye, EyeOff } from "lucide-react";
 
 function AdminCoursesContent() {
   const { data: session } = useSession();
@@ -43,26 +43,47 @@ function AdminCoursesContent() {
     }
   });
 
-		const handleSubmit = async (e: React.FormEvent) => {
-			e.preventDefault();
-			if (!session?.user?.id || !session?.user?.role) return;
+  const togglePublishMutation = trpc.toggleCoursePublish.useMutation({
+    onSuccess: () => {
+      refetchCourses();
+    },
+    onError: (error) => {
+      alert(error.message);
+    }
+  });
 
-			// Prepare form data - don't send empty categoryId
-			const submitData: any = {
-				title: formData.title,
-				description: formData.description,
-				level: formData.level,
-				creatorId: session.user.id,
-				userRole: session.user.role,
-			};
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!session?.user?.id || !session?.user?.role) return;
 
-			// Only include categoryId if one is selected
-			if (formData.categoryId && formData.categoryId.trim() !== '') {
-				submitData.categoryId = formData.categoryId;
-			}
+    // Prepare form data - don't send empty categoryId
+    const submitData: any = {
+      title: formData.title,
+      description: formData.description,
+      level: formData.level,
+      creatorId: session.user.id,
+      userRole: session.user.role,
+    };
 
-			createCourseMutation.mutate(submitData);
-		};
+    // Only include categoryId if one is selected
+    if (formData.categoryId && formData.categoryId.trim() !== '') {
+      submitData.categoryId = formData.categoryId;
+    }
+
+    createCourseMutation.mutate(submitData);
+  };
+
+  const handleTogglePublish = (courseId: string, currentStatus: boolean) => {
+    if (!session?.user?.id || !session?.user?.role) return;
+
+    togglePublishMutation.mutate({
+      courseId,
+      published: !currentStatus,
+      creatorId: session.user.id,
+      userRole: session.user.role,
+    });
+  };
+
   return (
     <div className="min-h-screen bg-school-primary-nyanza">
       <Navbar />
@@ -178,6 +199,30 @@ function AdminCoursesContent() {
           </div>
         )}
 
+        {/* Course Stats */}
+        {courses && courses.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="bg-white rounded-lg border border-school-primary-paledogwood p-4">
+              <div className="text-2xl font-bold text-school-primary-blue">
+                {courses.length}
+              </div>
+              <div className="text-sm text-gray-600">Total Courses</div>
+            </div>
+            <div className="bg-white rounded-lg border border-school-primary-paledogwood p-4">
+              <div className="text-2xl font-bold text-green-600">
+                {courses.filter(c => c.published).length}
+              </div>
+              <div className="text-sm text-gray-600">Published</div>
+            </div>
+            <div className="bg-white rounded-lg border border-school-primary-paledogwood p-4">
+              <div className="text-2xl font-bold text-yellow-600">
+                {courses.filter(c => !c.published).length}
+              </div>
+              <div className="text-sm text-gray-600">Drafts</div>
+            </div>
+          </div>
+        )}
+
         {/* Courses Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {courses?.map(course => (
@@ -212,13 +257,32 @@ function AdminCoursesContent() {
               </div>
 
               <div className="flex space-x-2">
+                <Button
+                  onClick={() => handleTogglePublish(course.id, course.published)}
+                  disabled={togglePublishMutation.isPending}
+                  size="sm"
+                  variant={course.published ? "outline" : "default"}
+                  className={`flex-1 ${
+                    course.published 
+                      ? '' 
+                      : 'bg-green-600 hover:bg-green-700 text-white'
+                  }`}
+                >
+                  {course.published ? (
+                    <>
+                      <EyeOff className="w-4 h-4 mr-1" />
+                      Unpublish
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="w-4 h-4 mr-1" />
+                      Publish
+                    </>
+                  )}
+                </Button>
                 <Button size="sm" variant="outline" className="flex-1">
                   <Edit className="w-4 h-4 mr-1" />
                   Edit
-                </Button>
-                <Button size="sm" className="flex-1 bg-school-primary-blue hover:bg-school-primary-blue/90 text-white">
-                  <Settings className="w-4 h-4 mr-1" />
-                  Manage
                 </Button>
               </div>
             </div>

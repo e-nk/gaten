@@ -112,58 +112,63 @@ export const appRouter = router({
 
   // Course procedures - require userId to be passed from frontend
   getCourses: publicProcedure
-    .input(z.object({
-      search: z.string().optional(),
-      categoryId: z.string().optional(),
-      level: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']).optional(),
-    }))
-    .query(async ({ input }) => {
-      const database = getDb();
-      
-      const whereClause: any = {
-        published: true,
-      };
+  .input(z.object({
+    search: z.string().optional(),
+    categoryId: z.string().optional(),
+    level: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']).optional(),
+  }).transform(data => ({
+    // Transform empty strings to undefined
+    search: data.search && data.search.trim() !== '' ? data.search : undefined,
+    categoryId: data.categoryId && data.categoryId.trim() !== '' ? data.categoryId : undefined,
+    level: data.level && data.level.trim() !== '' ? data.level as 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' : undefined,
+  })))
+  .query(async ({ input }) => {
+    const database = getDb();
+    
+    const whereClause: any = {
+      published: true,
+    };
 
-      if (input.search) {
-        whereClause.OR = [
-          { title: { contains: input.search, mode: 'insensitive' } },
-          { description: { contains: input.search, mode: 'insensitive' } },
-        ];
-      }
+    if (input.search) {
+      whereClause.OR = [
+        { title: { contains: input.search, mode: 'insensitive' } },
+        { description: { contains: input.search, mode: 'insensitive' } },
+      ];
+    }
 
-      if (input.categoryId) {
-        whereClause.categoryId = input.categoryId;
-      }
+    if (input.categoryId) {
+      whereClause.categoryId = input.categoryId;
+    }
 
-      if (input.level) {
-        whereClause.level = input.level;
-      }
+    if (input.level) {
+      whereClause.level = input.level;
+    }
 
-      const courses = await database.course.findMany({
-        where: whereClause,
-        include: {
-          creator: {
-            select: { name: true }
-          },
-          category: {
-            select: { name: true, color: true }
-          },
-          _count: {
-            select: { 
-              enrollments: true,
-              modules: true,
-              reviews: true
-            }
-          }
+    const courses = await database.course.findMany({
+      where: whereClause,
+      include: {
+        creator: {
+          select: { name: true }
         },
-        orderBy: [
-          { featured: 'desc' },
-          { createdAt: 'desc' }
-        ]
-      });
+        category: {
+          select: { name: true, color: true }
+        },
+        _count: {
+          select: { 
+            enrollments: true,
+            modules: true,
+            reviews: true
+          }
+        }
+      },
+      orderBy: [
+        { featured: 'desc' },
+        { createdAt: 'desc' }
+      ]
+    });
 
-      return courses;
-    }),
+    return courses;
+  }),
 
   enrollInCourse: publicProcedure
     .input(z.object({
@@ -325,6 +330,39 @@ export const appRouter = router({
 
       return courses;
     }),
+
+		toggleCoursePublish: publicProcedure
+		.input(z.object({
+			courseId: z.string(),
+			published: z.boolean(),
+			creatorId: z.string(),
+			userRole: z.string(),
+		}))
+		.mutation(async ({ input }) => {
+			// Validate admin access
+			if (input.userRole !== 'ADMIN') {
+				throw new Error('Admin access required');
+			}
+
+			const database = getDb();
+			
+			const course = await database.course.update({
+				where: { 
+					id: input.courseId,
+					creatorId: input.creatorId // Ensure user owns the course
+				},
+				data: {
+					published: input.published
+				},
+				include: {
+					category: {
+						select: { name: true }
+					}
+				}
+			});
+
+			return course;
+		}),
 });
 
 export type AppRouter = typeof appRouter;
