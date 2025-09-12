@@ -1,10 +1,22 @@
-import { router, publicProcedure } from './trpc'; // Add this import!
+import { router, publicProcedure } from './trpc';
+import { db } from '@gaten/db';
 
 export const appRouter = router({
-  // All your actual routes will go here when we build them
-  // For now, just a health check
-  healthCheck: publicProcedure.query(() => {
-    return { status: 'tRPC is working!' };
+  // Health check with database connection test
+  healthCheck: publicProcedure.query(async () => {
+    try {
+      // Test database connection
+      await db.$queryRaw`SELECT 1`;
+      return { 
+        status: 'tRPC is working!', 
+        database: 'Connected' 
+      };
+    } catch (error) {
+      return { 
+        status: 'tRPC is working!', 
+        database: 'Disconnected - will connect when deployed' 
+      };
+    }
   }),
 });
 
