@@ -1,11 +1,12 @@
 import { router, publicProcedure } from './trpc';
-import { db } from '@gaten/db';
+import { PrismaClient } from '@prisma/client';
+
+// Create Prisma client directly in backend
+const db = new PrismaClient();
 
 export const appRouter = router({
-  // Health check with database connection test
   healthCheck: publicProcedure.query(async () => {
     try {
-      // Test database connection
       await db.$queryRaw`SELECT 1`;
       return { 
         status: 'tRPC is working!', 
@@ -14,7 +15,8 @@ export const appRouter = router({
     } catch (error) {
       return { 
         status: 'tRPC is working!', 
-        database: 'Disconnected - will connect when deployed' 
+        database: 'Disconnected',
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }),
