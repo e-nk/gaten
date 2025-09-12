@@ -9,6 +9,8 @@ import type { AppRouter } from '@gaten/backend/src/router'; // Changed from 'rou
 export const trpc = createTRPCReact<AppRouter>();
 
 export function TRPCProvider({ children }: { children: React.ReactNode }) {
+	const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
@@ -21,7 +23,7 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
     trpc.createClient({
       links: [
         httpBatchLink({
-          url: 'http://localhost:4000/trpc',
+          url: `${apiUrl}/trpc`,
         }),
       ],
     })
