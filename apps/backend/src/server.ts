@@ -2,21 +2,20 @@ import express from 'express';
 import cors from 'cors';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from './router';
+import { createContext } from './trpc';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// Updated CORS configuration
 const allowedOrigins = [
-  'http://localhost:3000',           // Local development
-  'https://gaten.vercel.app',        // Your Vercel deployment
-  'https://gaten-*.vercel.app',       // Preview deployments (optional)
-	'https://gatenlabs.com/'
+  'http://localhost:3000',
+  'https://gaten.vercel.app',
+  'https://gaten-*.vercel.app',
+  'https://gatenlabs.com/'
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, etc.)
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.some(allowed => {
@@ -34,7 +33,6 @@ app.use(cors({
   credentials: true
 }));
 
-// Rest of your server code remains the same
 app.use(express.json());
 
 app.get('/health', (req, res) => {
@@ -43,7 +41,7 @@ app.get('/health', (req, res) => {
 
 app.use('/trpc', createExpressMiddleware({
   router: appRouter,
-  createContext: () => ({}),
+  createContext, // Use our new context
 }));
 
 app.listen(PORT, () => {

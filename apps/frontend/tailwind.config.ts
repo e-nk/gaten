@@ -13,11 +13,14 @@ const config: Config = {
         school: {
           // Primary colors
           primary: {
-            nyanza: '#E5F9E0',        // Primary nyanza 
-            blue: '##0b1320',       // Primary Blue
-            white: '#FFFFFC',      // White
+            nyanza: '#FFFFFC',        // Primary nyanza 
+            blue: '#0b1320',       // Primary Blue
+            white: '#FFFFFF',      // White
             black: '#000000',      // Black
             paledogwood: '#C9B7AD',  // Pale Dogwood
+						darkpurple: '#22031F', // Dark Purple
+						pink: '#CC76A1',      // Pink
+						puce: '#DD9296',      // Puce
           },
         },
       },

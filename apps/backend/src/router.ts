@@ -1,5 +1,6 @@
-import { router, publicProcedure } from './trpc';
+import { router, publicProcedure, protectedProcedure, adminProcedure } from './trpc';
 import { PrismaClient } from '@prisma/client';
+import { z } from 'zod';
 
 let db: PrismaClient | null = null;
 
@@ -11,14 +12,12 @@ const getDb = () => {
 };
 
 export const appRouter = router({
+  // Public procedures
   healthCheck: publicProcedure.query(async () => {
     try {
       const database = getDb();
-      
-      // Test database connection with our new schema
       await database.$queryRaw`SELECT 1`;
       
-      // Get counts of main tables to verify schema
       const userCount = await database.user.count();
       const courseCount = await database.course.count();
       const categoryCount = await database.category.count();
@@ -41,12 +40,10 @@ export const appRouter = router({
     }
   }),
 
-  // Test procedure to create a sample category
   createSampleData: publicProcedure.mutation(async () => {
     try {
       const database = getDb();
       
-      // Create sample category if it doesn't exist
       const category = await database.category.upsert({
         where: { slug: 'programming' },
         update: {},
@@ -70,7 +67,73 @@ export const appRouter = router({
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
-  })
+  }),
+
+  // Protected procedures (require authentication)
+  getProfile: protectedProcedure.query(async ({ ctx }) => {
+    const database = getDb();
+    const user = await database.user.findUnique({
+      where: { id: ctx.user.sub },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        totalPoints: true,
+        currentStreak: true,
+        createdAt: true,
+      }
+    });
+    
+    return user;
+  }),
+
+  // Admin-only procedures
+  getAllUsers: adminProcedure.query(async () => {
+    const database = getDb();
+    const users = await database.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        _count: {
+          select: {
+            enrollments: true,
+            createdCourses: true,
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+    
+    return users;
+  }),
+
+  createCourse: adminProcedure
+    .input(z.object({
+      title: z.string().min(1),
+      description: z.string().optional(),
+      categoryId: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const database = getDb();
+      
+      const course = await database.course.create({
+        data: {
+          title: input.title,
+          description: input.description,
+          slug: input.title.toLowerCase().replace(/\s+/g, '-'),
+          creatorId: ctx.user.sub,
+          categoryId: input.categoryId,
+        }
+      });
+      
+      return course;
+    }),
 });
 
 export type AppRouter = typeof appRouter;
