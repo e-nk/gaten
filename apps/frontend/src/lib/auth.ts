@@ -27,15 +27,13 @@ export const authOptions: NextAuthOptions = {
           }
         });
 
-        if (!user) {
+        if (!user || !user.password) {
           return null;
         }
 
-        // For now, we'll implement basic password checking
-        // In production, you'd compare hashed passwords
         const isPasswordValid = await bcrypt.compare(
           credentials.password,
-          user.password || ""
+          user.password
         );
 
         if (!isPasswordValid) {
@@ -46,7 +44,7 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           email: user.email,
           name: user.name,
-          role: user.role,
+          role: user.role, // Make sure role is included
         };
       }
     }),
@@ -62,6 +60,17 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.role = user.role;
+        token.id = user.id;
+      }
+      // If token exists but no role, fetch from database
+      if (token && !token.role) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.sub! },
+          select: { role: true }
+        });
+        if (dbUser) {
+          token.role = dbUser.role;
+        }
       }
       return token;
     },

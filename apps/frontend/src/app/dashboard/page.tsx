@@ -4,6 +4,9 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Navbar } from "@/components/navigation/navbar";
+import { SessionDebug } from "@/components/debug/session-debug";
+import Link from "next/link";
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
@@ -29,129 +32,117 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-school-primary-nyanza">
-      {/* Header */}
-      <header className="bg-white border-b border-school-primary-paledogwood">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <h1 className="text-xl font-semibold text-school-primary-blue">
-              Gaten LMS
-            </h1>
-            
-            <div className="flex items-center gap-4">
-              <span className="text-school-primary-blue">
-                Welcome, {session.user?.name}
-              </span>
-              <span className="px-2 py-1 bg-school-primary-nyanza text-school-primary-blue text-xs rounded">
-                {session.user?.role}
-              </span>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Navbar />
+      <SessionDebug />
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-school-primary-blue mb-2">
-            Dashboard
-          </h2>
+          <h1 className="text-3xl font-bold text-school-primary-blue mb-2">
+            Welcome back, {session.user?.name}!
+          </h1>
           <p className="text-gray-600">
             {session.user?.role === 'ADMIN' ? 
-              'Manage courses and monitor student progress' : 
+              'Manage your courses and monitor student progress' : 
               'Continue your learning journey'
             }
           </p>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Rest of your dashboard content */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {session.user?.role === 'ADMIN' ? (
             <>
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <Link href="/admin/courses" className="block">
+                <div className="bg-white p-6 rounded-lg border border-school-primary-paledogwood hover:shadow-lg transition-shadow cursor-pointer">
+                  <div className="w-12 h-12 bg-school-primary-blue rounded-lg flex items-center justify-center mb-4">
+                    <div className="w-6 h-6 bg-white rounded"></div>
+                  </div>
+                  <h3 className="font-semibold text-school-primary-blue mb-2">
+                    Manage Courses
+                  </h3>
+                  <p className="text-gray-600 text-sm">
+                    Create and edit your educational content
+                  </p>
+                </div>
+              </Link>
+
+              <div className="bg-white p-6 rounded-lg border border-school-primary-paledogwood hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="w-12 h-12 bg-school-primary-pink rounded-lg flex items-center justify-center mb-4">
+                  <div className="w-6 h-6 bg-white rounded"></div>
+                </div>
                 <h3 className="font-semibold text-school-primary-blue mb-2">
-                  Create Course
+                  Manage Users
                 </h3>
-                <p className="text-gray-600 text-sm mb-4">
-                  Build a new course for students
+                <p className="text-gray-600 text-sm">
+                  View and manage student accounts
                 </p>
-                <Button className="bg-school-primary-blue hover:bg-school-primary-blue/90">
-                  Create Course
-                </Button>
               </div>
 
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div className="bg-white p-6 rounded-lg border border-school-primary-paledogwood hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="w-12 h-12 bg-school-primary-puce rounded-lg flex items-center justify-center mb-4">
+                  <div className="w-6 h-6 bg-white rounded"></div>
+                </div>
                 <h3 className="font-semibold text-school-primary-blue mb-2">
-                  Manage Categories
+                  Analytics
                 </h3>
-                <p className="text-gray-600 text-sm mb-4">
-                  Organize course categories
+                <p className="text-gray-600 text-sm">
+                  Track engagement and progress
                 </p>
-                <Button variant="outline">
-                  Manage Categories
-                </Button>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
-                <h3 className="font-semibold text-school-primary-blue mb-2">
-                  View Analytics
-                </h3>
-                <p className="text-gray-600 text-sm mb-4">
-                  Track student progress
-                </p>
-                <Button variant="outline">
-                  View Analytics
-                </Button>
               </div>
             </>
           ) : (
             <>
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
-                <h3 className="font-semibold text-school-primary-blue mb-2">
-                  Browse Courses
-                </h3>
-                <p className="text-gray-600 text-sm mb-4">
-                  Discover new learning opportunities
-                </p>
-                <Button className="bg-school-primary-blue hover:bg-school-primary-blue/90">
-                  Browse Courses
-                </Button>
-              </div>
+              <Link href="/courses" className="block">
+                <div className="bg-white p-6 rounded-lg border border-school-primary-paledogwood hover:shadow-lg transition-shadow cursor-pointer">
+                  <div className="w-12 h-12 bg-school-primary-blue rounded-lg flex items-center justify-center mb-4">
+                    <div className="w-6 h-6 bg-white rounded"></div>
+                  </div>
+                  <h3 className="font-semibold text-school-primary-blue mb-2">
+                    Browse Courses
+                  </h3>
+                  <p className="text-gray-600 text-sm">
+                    Discover new learning opportunities
+                  </p>
+                </div>
+              </Link>
 
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
-                <h3 className="font-semibold text-school-primary-blue mb-2">
-                  My Learning
-                </h3>
-                <p className="text-gray-600 text-sm mb-4">
-                  Continue your enrolled courses
-                </p>
-                <Button variant="outline">
-                  My Courses
-                </Button>
-              </div>
+              <Link href="/my-learning" className="block">
+                <div className="bg-white p-6 rounded-lg border border-school-primary-paledogwood hover:shadow-lg transition-shadow cursor-pointer">
+                  <div className="w-12 h-12 bg-school-primary-pink rounded-lg flex items-center justify-center mb-4">
+                    <div className="w-6 h-6 bg-white rounded"></div>
+                  </div>
+                  <h3 className="font-semibold text-school-primary-blue mb-2">
+                    My Learning
+                  </h3>
+                  <p className="text-gray-600 text-sm">
+                    Continue your enrolled courses
+                  </p>
+                </div>
+              </Link>
 
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div className="bg-white p-6 rounded-lg border border-school-primary-paledogwood hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="w-12 h-12 bg-school-primary-puce rounded-lg flex items-center justify-center mb-4">
+                  <div className="w-6 h-6 bg-white rounded"></div>
+                </div>
                 <h3 className="font-semibold text-school-primary-blue mb-2">
                   Achievements
                 </h3>
-                <p className="text-gray-600 text-sm mb-4">
+                <p className="text-gray-600 text-sm">
                   View your learning progress
                 </p>
-                <Button variant="outline">
-                  View Progress
-                </Button>
               </div>
             </>
           )}
         </div>
 
-        {/* Recent Activity Placeholder */}
-        <div className="mt-8 bg-white rounded-lg shadow-sm border p-6">
-          <h3 className="font-semibold text-school-primary-blue mb-4">
+        {/* Recent Activity */}
+        <div className="bg-white rounded-lg border border-school-primary-paledogwood p-6">
+          <h2 className="text-xl font-semibold text-school-primary-blue mb-4">
             Recent Activity
-          </h3>
-          <p className="text-gray-500 text-center py-8">
+          </h2>
+          <div className="text-center py-8 text-gray-500">
             No recent activity to display
-          </p>
+          </div>
         </div>
       </main>
     </div>
