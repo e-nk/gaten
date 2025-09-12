@@ -6,20 +6,41 @@ import { appRouter } from './router';
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// CORS for frontend
+// Updated CORS configuration
+const allowedOrigins = [
+  'http://localhost:3000',           // Local development
+  'https://gaten.vercel.app',        // Your Vercel deployment
+  'https://gaten-*.vercel.app',       // Preview deployments (optional)
+	'https://gatenlabs.com/'
+];
+
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.some(allowed => {
+      if (allowed.includes('*')) {
+        const pattern = allowed.replace('*', '.*');
+        return new RegExp(pattern).test(origin);
+      }
+      return allowed === origin;
+    })) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 
+// Rest of your server code remains the same
 app.use(express.json());
 
-// Regular Express health check
 app.get('/health', (req, res) => {
   res.json({ status: 'Backend server running!' });
 });
 
-// tRPC API endpoint
 app.use('/trpc', createExpressMiddleware({
   router: appRouter,
   createContext: () => ({}),
