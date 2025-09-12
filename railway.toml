@@ -1,5 +1,6 @@
 [build]
 builder = "nixpacks"
+buildCommand = "cd apps/backend && npm install && npx prisma generate && npm run build"
 
 [deploy]
 startCommand = "npm run start --workspace=apps/backend"
