@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { TRPCProvider } from "@/trpc/provider";
-
+import AuthProvider from "@/components/providers/session-provider";
 
 export const metadata: Metadata = {
   title: "Gaten",
@@ -16,9 +16,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-garamond antialiased">
-				<TRPCProvider>
-          {children}
-				</TRPCProvider>
+        <AuthProvider>
+          <TRPCProvider>
+            {children}
+          </TRPCProvider>
+        </AuthProvider>
       </body>
     </html>
   );

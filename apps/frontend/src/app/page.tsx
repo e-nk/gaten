@@ -2,23 +2,70 @@
 
 import { trpc } from '@/trpc/provider';
 import { Button } from '@/components/ui/button';
+import { useSession, signOut } from 'next-auth/react';
+import Link from 'next/link';
 
 export default function Home() {
+  const { data: session, status } = useSession();
   const { data: health, refetch } = trpc.healthCheck.useQuery();
   const createSample = trpc.createSampleData.useMutation({
     onSuccess: () => {
-      refetch(); // Refresh health check to see new data
+      refetch();
     }
   });
 
   return (
     <div className="min-h-screen bg-school-primary-nyanza p-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8 text-school-primary-blue">
-          Gaten LMS
-        </h1>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-4xl font-bold text-school-primary-blue">
+            Gaten LMS
+          </h1>
+
+          {/* Auth Status */}
+          <div className="flex items-center gap-4">
+            {status === 'loading' && (
+              <p className="text-school-primary-blue">Loading...</p>
+            )}
+            
+            {status === 'unauthenticated' && (
+              <div className="flex gap-2">
+                <Link href="/auth/signin">
+                  <Button variant="outline" size="sm">
+                    Sign In
+                  </Button>
+                </Link>
+                <Link href="/auth/signup">
+                  <Button size="sm" className="bg-school-primary-blue hover:bg-school-primary-blue/90">
+                    Sign Up
+                  </Button>
+                </Link>
+              </div>
+            )}
+            
+            {status === 'authenticated' && session && (
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <p className="font-medium text-school-primary-blue">
+                    {session.user?.name}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {session.user?.role}
+                  </p>
+                </div>
+                <Button 
+                  onClick={() => signOut()}
+                  variant="outline" 
+                  size="sm"
+                >
+                  Sign Out
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
         
-        {/* Database Status */}
+        {/* System Status */}
         <div className="p-6 bg-white rounded-lg shadow-sm border mb-6">
           <h2 className="text-xl font-semibold text-school-primary-blue mb-4">
             System Status
@@ -42,12 +89,6 @@ export default function Home() {
                 </ul>
               </div>
             )}
-            
-            {health?.error && (
-              <p className="text-red-600 text-sm mt-2">
-                Error: {health.error}
-              </p>
-            )}
           </div>
         </div>
 
@@ -70,6 +111,17 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        {/* Test Credentials */}
+        {status === 'unauthenticated' && (
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg border">
+            <h4 className="font-medium text-school-primary-blue mb-2">Test Credentials:</h4>
+            <div className="text-sm space-y-1">
+              <p><strong>Admin:</strong> admin@gaten.com / password123</p>
+              <p><strong>Student:</strong> student@gaten.com / password123</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
