@@ -226,26 +226,33 @@ function calculateMatchingScore(content: any, responses: any): number {
 function calculateTimelineScore(content: any, responses: any): number {
   const events = content.events || [];
   const userPlacements = responses.placements || {};
+  const allowApproximate = content.allowApproximate !== false;
   
-  let correctCount = 0;
+  if (events.length === 0) return 0;
+  
+  let correctPlacements = 0;
   
   events.forEach((event: any) => {
-    const userDate = userPlacements[event.id];
-    const correctDate = event.date;
+    const placement = userPlacements[event.id];
+    if (!placement) return; // Event not placed
     
-    // Allow some margin of error for timeline placement
-    const margin = content.config?.dateMargin || 365; // days
-    const userTime = new Date(userDate).getTime();
-    const correctTime = new Date(correctDate).getTime();
-    const difference = Math.abs(userTime - correctTime);
-    const daysDifference = difference / (1000 * 60 * 60 * 24);
+    const correctDate = new Date(event.date || `${event.year}-${String(event.month || 1).padStart(2, '0')}-${String(event.day || 1).padStart(2, '0')}`);
+    const placedDate = new Date(placement.date);
     
-    if (daysDifference <= margin) {
-      correctCount++;
+    // Calculate difference in years
+    const yearDifference = Math.abs(correctDate.getFullYear() - placedDate.getFullYear());
+    
+    // Determine if placement is correct based on tolerance
+    const tolerance = allowApproximate ? 1 : 0; // 1 year tolerance if approximate allowed
+    const isCorrect = yearDifference <= tolerance;
+    
+    if (isCorrect) {
+      correctPlacements++;
     }
   });
   
-  return events.length > 0 ? Math.round((correctCount / events.length) * 100) : 0;
+  // Calculate score as percentage of correct placements
+  return Math.round((correctPlacements / events.length) * 100);
 }
 
 function isPointInHotspot(point: { x: number; y: number }, hotspot: any): boolean {

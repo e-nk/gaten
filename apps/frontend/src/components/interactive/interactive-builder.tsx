@@ -71,59 +71,74 @@ export function InteractiveBuilder({ onSave, initialData }: InteractiveBuilderPr
   };
 
   const validateContentByType = (): boolean => {
-    const { type, content } = interactiveSettings;
-    
-    switch (type) {
-      case 'DRAG_DROP':
-        if (!content.items || content.items.length === 0) {
-          alert('Please add at least one drag and drop item');
-          return false;
-        }
-        if (!content.targets || content.targets.length === 0) {
-          alert('Please add at least one drop target');
-          return false;
-        }
-        break;
-        
-      case 'HOTSPOT':
-        if (!content.imageUrl) {
-          alert('Please upload an image for hotspot activity');
-          return false;
-        }
-        if (!content.hotspots || content.hotspots.length === 0) {
-          alert('Please add at least one hotspot');
-          return false;
-        }
-        break;
-        
-      case 'SEQUENCE':
-        if (!content.items || content.items.length < 2) {
-          alert('Please add at least two items to sequence');
-          return false;
-        }
-        break;
-        
-      case 'MATCHING':
-        if (!content.leftItems || content.leftItems.length === 0) {
-          alert('Please add items to match');
-          return false;
-        }
-        if (!content.rightItems || content.rightItems.length === 0) {
-          alert('Please add target items');
-          return false;
-        }
-        break;
-        
-      default:
-        // Basic content check for other types
-        if (!content.description && !content.items) {
-          alert('Please configure the interactive content');
-          return false;
-        }
-    }
-    
-    return true;
-  };
+		const { type, content } = interactiveSettings;
+		
+		switch (type) {
+			case 'DRAG_DROP':
+				if (!content.items || content.items.length === 0) {
+					alert('Please add at least one drag and drop item');
+					return false;
+				}
+				if (!content.targets || content.targets.length === 0) {
+					alert('Please add at least one drop target');
+					return false;
+				}
+				break;
+				
+			case 'HOTSPOT':
+				if (!content.imageUrl) {
+					alert('Please upload an image for hotspot activity');
+					return false;
+				}
+				if (!content.hotspots || content.hotspots.length === 0) {
+					alert('Please add at least one hotspot');
+					return false;
+				}
+				break;
+				
+			case 'SEQUENCE':
+				if (!content.items || content.items.length < 2) {
+					alert('Please add at least two items to sequence');
+					return false;
+				}
+				break;
+				
+			case 'MATCHING':
+				if (!content.leftItems || content.leftItems.length === 0) {
+					alert('Please add items to match');
+					return false;
+				}
+				if (!content.rightItems || content.rightItems.length === 0) {
+					alert('Please add target items');
+					return false;
+				}
+				break;
+				
+			case 'TIMELINE':
+				if (!content.events || content.events.length < 2) {
+					alert('Please add at least two events to the timeline');
+					return false;
+				}
+				// Check if all events have titles and valid dates
+				const invalidEvents = content.events.filter((event: any) => 
+					!event.title || !event.year || event.year < (content.startYear || 2000) || event.year > (content.endYear || 2030)
+				);
+				if (invalidEvents.length > 0) {
+					alert('Please ensure all events have titles and valid dates within the timeline range');
+					return false;
+				}
+				break;
+				
+			default:
+				// Basic content check for other types
+				if (!content.description && !content.items) {
+					alert('Please configure the interactive content');
+					return false;
+				}
+		}
+		
+		return true;
+	};
 
   const updateContentField = (field: string, value: any) => {
     setInteractiveSettings(prev => ({
@@ -1914,18 +1929,454 @@ function MatchingEditor({ content, onUpdate }: { content: any; onUpdate: (field:
   );
 }
 
-
-// Placeholder editors for other types
-
 function TimelineEditor({ content, onUpdate }: { content: any; onUpdate: (field: string, value: any) => void }) {
+  const [events, setEvents] = useState(content.events || []);
+  const [timelineSettings, setTimelineSettings] = useState({
+    startYear: content.startYear || new Date().getFullYear() - 10,
+    endYear: content.endYear || new Date().getFullYear() + 10,
+    timeUnit: content.timeUnit || 'year', // year, month, day
+    showDates: content.showDates !== false,
+    allowApproximate: content.allowApproximate !== false
+  });
+  const [showInstructions, setShowInstructions] = useState(true);
+
+  const addEvent = () => {
+    const newEvent = {
+      id: String(Date.now()),
+      title: '',
+      description: '',
+      date: '', // Will be in YYYY-MM-DD format
+      year: timelineSettings.startYear,
+      month: 1,
+      day: 1
+    };
+    const newEvents = [...events, newEvent];
+    setEvents(newEvents);
+    onUpdate('events', newEvents);
+  };
+
+  const updateEvent = (index: number, field: string, value: any) => {
+    const newEvents = [...events];
+    newEvents[index] = { ...newEvents[index], [field]: value };
+    
+    // If updating date components, rebuild the date string
+    if (['year', 'month', 'day'].includes(field)) {
+      const event = newEvents[index];
+      const year = field === 'year' ? value : event.year;
+      const month = field === 'month' ? value : event.month;
+      const day = field === 'day' ? value : event.day;
+      newEvents[index].date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+    
+    setEvents(newEvents);
+    onUpdate('events', newEvents);
+  };
+
+  const removeEvent = (index: number) => {
+    const newEvents = events.filter((_: any, i: number) => i !== index);
+    setEvents(newEvents);
+    onUpdate('events', newEvents);
+  };
+
+  const updateTimelineSettings = (field: string, value: any) => {
+    const newSettings = { ...timelineSettings, [field]: value };
+    setTimelineSettings(newSettings);
+    
+    // Update all timeline settings in content
+    Object.keys(newSettings).forEach(key => {
+      onUpdate(key, newSettings[key as keyof typeof newSettings]);
+    });
+  };
+
+  const sortEventsByDate = () => {
+    const sortedEvents = [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    setEvents(sortedEvents);
+    onUpdate('events', sortedEvents);
+  };
+
+  const getDateFromEvent = (event: any) => {
+    if (event.date) return new Date(event.date);
+    return new Date(event.year || timelineSettings.startYear, (event.month || 1) - 1, event.day || 1);
+  };
+
   return (
-    <div className="text-center py-8 text-gray-500">
-      <Calendar className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-      <p>Timeline editor: Create interactive timeline with events</p>
-      <p className="text-sm mt-2">Will include event management, dates, and timeline configuration</p>
+    <div className="space-y-6">
+      {/* Instructions */}
+      {showInstructions && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+          <div className="flex items-start justify-between">
+            <div className="flex">
+              <Calendar className="w-5 h-5 text-indigo-600 mr-2 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-indigo-800 mb-1">How Timeline Activities Work</h4>
+                <ul className="text-sm text-indigo-700 space-y-1">
+                  <li>• Create historical events with specific dates</li>
+                  <li>• Set the timeline range (start and end years)</li>
+                  <li>• Students will drag events to correct positions on the timeline</li>
+                  <li>• You can allow approximate placement for more flexible scoring</li>
+                </ul>
+              </div>
+            </div>
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowInstructions(false);
+              }}
+              size="sm"
+              variant="outline"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Timeline Settings */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <h4 className="font-medium text-school-primary-blue mb-4">Timeline Settings</h4>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Start Year
+            </label>
+            <input
+              type="number"
+              value={timelineSettings.startYear}
+              onChange={(e) => {
+                e.stopPropagation();
+                updateTimelineSettings('startYear', parseInt(e.target.value) || 2000);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              End Year
+            </label>
+            <input
+              type="number"
+              value={timelineSettings.endYear}
+              onChange={(e) => {
+                e.stopPropagation();
+                updateTimelineSettings('endYear', parseInt(e.target.value) || 2030);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Time Unit
+            </label>
+            <select
+              value={timelineSettings.timeUnit}
+              onChange={(e) => {
+                e.stopPropagation();
+                updateTimelineSettings('timeUnit', e.target.value);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+            >
+              <option value="year">Year</option>
+              <option value="month">Month</option>
+              <option value="day">Day</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="showDates"
+              checked={timelineSettings.showDates}
+              onChange={(e) => {
+                e.stopPropagation();
+                updateTimelineSettings('showDates', e.target.checked);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="mr-2"
+            />
+            <label htmlFor="showDates" className="text-sm text-gray-700">
+              Show dates on timeline
+            </label>
+          </div>
+
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="allowApproximate"
+              checked={timelineSettings.allowApproximate}
+              onChange={(e) => {
+                e.stopPropagation();
+                updateTimelineSettings('allowApproximate', e.target.checked);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="mr-2"
+            />
+            <label htmlFor="allowApproximate" className="text-sm text-gray-700">
+              Allow approximate placement (±1 year tolerance)
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Events Management */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="font-medium text-school-primary-blue">Timeline Events</h4>
+          <div className="flex items-center gap-2">
+            {events.length > 1 && (
+              <Button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  sortEventsByDate();
+                }}
+                size="sm"
+                variant="outline"
+              >
+                <Calendar className="w-4 h-4 mr-1" />
+                Sort by Date
+              </Button>
+            )}
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                addEvent();
+              }}
+              size="sm"
+              variant="outline"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Add Event
+            </Button>
+          </div>
+        </div>
+
+        {events.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <Calendar className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+            <p className="mb-4">No timeline events yet</p>
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                addEvent();
+              }}
+              className="bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add First Event
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {events.map((event: any, index: number) => (
+              <div
+                key={event.id}
+                className="bg-white border border-gray-300 rounded-lg p-4 shadow-sm"
+              >
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Event Details */}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Event Title *
+                      </label>
+                      <input
+                        type="text"
+                        value={event.title}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          updateEvent(index, 'title', e.target.value);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+                        placeholder="Event title"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Description
+                      </label>
+                      <textarea
+                        value={event.description || ''}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          updateEvent(index, 'description', e.target.value);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue h-20 resize-none"
+                        placeholder="Event description"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Date Settings */}
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Year *
+                        </label>
+                        <input
+                          type="number"
+                          value={event.year || timelineSettings.startYear}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            updateEvent(index, 'year', parseInt(e.target.value) || timelineSettings.startYear);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          min={timelineSettings.startYear}
+                          max={timelineSettings.endYear}
+                          className="w-full px-2 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue text-sm"
+                        />
+                      </div>
+
+                      {timelineSettings.timeUnit !== 'year' && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Month
+                          </label>
+                          <select
+                            value={event.month || 1}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              updateEvent(index, 'month', parseInt(e.target.value));
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full px-2 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue text-sm"
+                          >
+                            {Array.from({ length: 12 }, (_, i) => (
+                              <option key={i + 1} value={i + 1}>
+                                {new Date(2000, i, 1).toLocaleDateString('en', { month: 'short' })}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {timelineSettings.timeUnit === 'day' && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Day
+                          </label>
+                          <input
+                            type="number"
+                            value={event.day || 1}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              updateEvent(index, 'day', parseInt(e.target.value) || 1);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            min="1"
+                            max="31"
+                            className="w-full px-2 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue text-sm"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-sm text-gray-600">
+                      <strong>Date:</strong> {getDateFromEvent(event).toLocaleDateString()}
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          removeEvent(index);
+                        }}
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600 hover:bg-red-50"
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        Remove Event
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Preview Timeline */}
+      {events.length > 0 && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <h4 className="font-medium text-school-primary-blue mb-4">Preview Timeline</h4>
+          
+          <div className="relative">
+            {/* Timeline Line */}
+            <div className="absolute top-6 left-8 right-8 h-0.5 bg-gray-400"></div>
+            
+            {/* Timeline Events */}
+            <div className="relative min-h-24">
+              {events
+                .sort((a, b) => getDateFromEvent(a).getTime() - getDateFromEvent(b).getTime())
+                .map((event: any, index: number) => {
+                  const eventDate = getDateFromEvent(event);
+                  const startDate = new Date(timelineSettings.startYear, 0, 1);
+                  const endDate = new Date(timelineSettings.endYear, 11, 31);
+                  const totalRange = endDate.getTime() - startDate.getTime();
+                  const eventOffset = eventDate.getTime() - startDate.getTime();
+                  const percentage = Math.max(0, Math.min(100, (eventOffset / totalRange) * 100));
+                  
+                  return (
+                    <div
+                      key={event.id}
+                      className="absolute transform -translate-x-1/2"
+                      style={{ left: `${percentage}%` }}
+                    >
+                      <div className="flex flex-col items-center">
+                        <div className="w-3 h-3 bg-indigo-500 rounded-full border-2 border-white shadow"></div>
+                        <div className="mt-2 bg-white border border-gray-300 rounded px-2 py-1 shadow-sm min-w-max">
+                          <div className="text-xs font-medium text-gray-900">{event.title}</div>
+                          {timelineSettings.showDates && (
+                            <div className="text-xs text-gray-600">{eventDate.getFullYear()}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+            
+            {/* Timeline Labels */}
+            {timelineSettings.showDates && (
+              <div className="flex justify-between mt-8 text-xs text-gray-600">
+                <span>{timelineSettings.startYear}</span>
+                <span>{timelineSettings.endYear}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 text-xs text-gray-600">
+            <p>💡 <strong>Note:</strong> Students will see these events in random order and need to place them correctly on the timeline.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+// Placeholder editors for other types
 
 function SimulationEditor({ content, onUpdate }: { content: any; onUpdate: (field: string, value: any) => void }) {
   return (
