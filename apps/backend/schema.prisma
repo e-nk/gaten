@@ -407,7 +407,7 @@ model InteractiveContent {
   
   // Content configuration (JSON structure varies by type)
   config      Json?         // Flexible configuration object
-  content     Json         // The actual interactive content data
+  content     Json?         // The actual interactive content data
   
   // Settings
   maxAttempts    Int      @default(1)
