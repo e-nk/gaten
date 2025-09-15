@@ -850,6 +850,7 @@ export default function CoursePlayerPage() {
 								{lessonData.lesson.type === 'INTERACTIVE' && (
 									<div className="bg-white border border-gray-200 rounded-lg p-6">
 										{showInteractiveResults && interactiveSubmissionResult && interactiveData ? (
+											// Show results from fresh submission
 											<InteractiveResults
 												interactiveContent={interactiveData}
 												result={interactiveSubmissionResult}
@@ -857,13 +858,33 @@ export default function CoursePlayerPage() {
 												onClose={() => {
 													setShowInteractiveResults(false);
 													setInteractiveSubmissionResult(null);
+													window.location.reload();
 												}}
 												onRetry={() => {
 													setShowInteractiveResults(false);
 													setInteractiveSubmissionResult(null);
 												}}
 											/>
+										) : interactiveData && interactiveAttempts && interactiveAttempts.length > 0 && 
+											(interactiveAttempts.length >= (interactiveData?.maxAttempts || 1)) ? (
+											// Show results when no attempts remaining
+											<InteractiveResults
+												interactiveContent={interactiveData}
+												result={{
+													attempt: interactiveAttempts[0], // Most recent attempt
+													score: interactiveAttempts[0]?.score || 0,
+													passed: interactiveData.passingScore ? 
+														(interactiveAttempts[0]?.score || 0) >= interactiveData.passingScore : 
+														true
+												}}
+												canRetry={false}
+												onClose={() => {
+													// Just a placeholder
+													console.log('No more attempts - results view');
+												}}
+											/>
 										) : interactiveData ? (
+											// Show normal player when attempts available
 											<InteractivePlayer
 												interactiveContent={interactiveData}
 												attempts={interactiveAttempts || []}
@@ -879,6 +900,7 @@ export default function CoursePlayerPage() {
 												}}
 											/>
 										) : (
+											// No interactive content configured
 											<div className="text-center py-12">
 												<div className="w-16 h-16 bg-school-primary-nyanza rounded-full flex items-center justify-center mx-auto mb-4">
 													<Target className="w-8 h-8 text-school-primary-blue" />

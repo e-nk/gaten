@@ -97,7 +97,20 @@ export function InteractivePlayer({
   };
 
   // Check if user has attempts remaining
-  if (attemptsRemaining <= 0) {
+ if (attemptsRemaining <= 0 && lastAttempt) {
+    // Calculate if they passed
+    const passed = interactiveContent.passingScore ? 
+      (lastAttempt.score || 0) >= interactiveContent.passingScore : 
+      true;
+
+    // Create a result object similar to what we get from mutation
+    const result = {
+      attempt: lastAttempt,
+      score: lastAttempt.score || 0,
+      passed: passed
+    };
+
+    // Show the results component directly
     return (
       <div className="bg-white border border-school-primary-paledogwood rounded-lg p-8 text-center">
         <AlertTriangle className="w-16 h-16 text-orange-500 mx-auto mb-4" />

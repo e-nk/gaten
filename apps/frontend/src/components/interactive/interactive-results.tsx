@@ -1,7 +1,17 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { CheckCircle, XCircle, Award, Clock, RotateCcw, ArrowLeft, Target } from "lucide-react";
+import { 
+  CheckCircle, 
+  XCircle, 
+  Award, 
+  Clock, 
+  RotateCcw, 
+  ArrowLeft, 
+  Target,
+  Trophy,
+  TrendingUp
+} from "lucide-react";
 
 interface InteractiveResultsProps {
   interactiveContent: any;
@@ -32,6 +42,25 @@ export function InteractiveResults({
     return passed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
   };
 
+  const getInteractiveTypeLabel = (type: string) => {
+    switch (type) {
+      case 'DRAG_DROP': return 'Drag & Drop';
+      case 'HOTSPOT': return 'Image Hotspots';
+      case 'SEQUENCE': return 'Sequence';
+      case 'MATCHING': return 'Matching';
+      case 'TIMELINE': return 'Timeline';
+      case 'SIMULATION': return 'Simulation';
+      case 'INTERACTIVE_VIDEO': return 'Interactive Video';
+      default: return 'Interactive Content';
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div className="bg-white border border-school-primary-paledogwood rounded-lg overflow-hidden">
       {/* Header */}
@@ -39,16 +68,16 @@ export function InteractiveResults({
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             {passed ? (
-              <CheckCircle className="w-8 h-8 text-green-600 mr-3" />
+              <Trophy className="w-8 h-8 text-green-600 mr-3" />
             ) : (
-              <XCircle className="w-8 h-8 text-red-600 mr-3" />
+              <Target className="w-8 h-8 text-red-600 mr-3" />
             )}
             <div>
               <h2 className="text-2xl font-bold text-school-primary-blue">
-                Activity {passed ? 'Completed!' : 'Results'}
+                {passed ? 'Excellent Work!' : 'Activity Complete'}
               </h2>
               <p className="text-gray-600">
-                {interactiveContent.title}
+                {getInteractiveTypeLabel(interactiveContent.type)} Results
               </p>
             </div>
           </div>
@@ -63,6 +92,30 @@ export function InteractiveResults({
               </div>
             )}
           </div>
+        </div>
+
+        {/* Status Message */}
+        <div className="mt-4">
+          {passed ? (
+            <div className="flex items-center text-green-700">
+              <CheckCircle className="w-5 h-5 mr-2" />
+              <span className="font-medium">
+                {passingScore ? `You passed! Score: ${score?.toFixed(1)}%` : 'Activity completed successfully!'}
+              </span>
+            </div>
+          ) : passingScore ? (
+            <div className="flex items-center text-red-700">
+              <XCircle className="w-5 h-5 mr-2" />
+              <span className="font-medium">
+                Score needed: {passingScore}% | Your score: {score?.toFixed(1)}%
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center text-blue-700">
+              <CheckCircle className="w-5 h-5 mr-2" />
+              <span className="font-medium">Activity completed!</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -82,20 +135,20 @@ export function InteractiveResults({
                   {score?.toFixed(1) || 0}%
                 </span>
               </div>
+              <div className="flex justify-between">
+                <span>Activity Type:</span>
+                <span className="font-medium">
+                  {getInteractiveTypeLabel(interactiveContent.type)}
+                </span>
+              </div>
               {passingScore && (
                 <div className="flex justify-between">
                   <span>Status:</span>
                   <span className={`font-medium ${passed ? 'text-green-600' : 'text-red-600'}`}>
-                    {passed ? 'Passed' : 'Failed'}
+                    {passed ? 'Passed' : 'Needs Improvement'}
                   </span>
                 </div>
               )}
-              <div className="flex justify-between">
-                <span>Activity Type:</span>
-                <span className="font-medium">
-                  {interactiveContent.type.replace('_', ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                </span>
-              </div>
             </div>
           </div>
 
@@ -109,7 +162,7 @@ export function InteractiveResults({
               <div className="flex justify-between">
                 <span>Time Spent:</span>
                 <span className="font-medium">
-                  {Math.floor(timeSpent / 60)}:{(timeSpent % 60).toString().padStart(2, '0')}
+                  {formatTime(timeSpent)}
                 </span>
               </div>
               {interactiveContent.timeLimit && (
@@ -182,29 +235,18 @@ export function InteractiveResults({
           )}
         </div>
 
-        {/* Activity-Specific Feedback */}
-        {interactiveContent.showFeedback && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <h4 className="font-medium text-blue-800 mb-2">Activity Feedback</h4>
-            <div className="text-blue-700 text-sm">
-              {interactiveContent.type === 'DRAG_DROP' && (
-                <p>You correctly placed {Math.round((score || 0) / 100 * (interactiveContent.content?.items?.length || 0))} out of {interactiveContent.content?.items?.length || 0} items.</p>
-              )}
-              {interactiveContent.type === 'HOTSPOT' && (
-                <p>You identified {Math.round((score || 0) / 100 * (interactiveContent.content?.hotspots?.length || 0))} out of {interactiveContent.content?.hotspots?.length || 0} correct areas.</p>
-              )}
-              {interactiveContent.type === 'SEQUENCE' && (
-                <p>You arranged {Math.round((score || 0) / 100 * (interactiveContent.content?.items?.length || 0))} out of {interactiveContent.content?.items?.length || 0} items correctly.</p>
-              )}
-              {interactiveContent.type === 'MATCHING' && (
-                <p>You made {Math.round((score || 0) / 100 * (interactiveContent.content?.leftItems?.length || 0))} out of {interactiveContent.content?.leftItems?.length || 0} correct matches.</p>
-              )}
-              {!['DRAG_DROP', 'HOTSPOT', 'SEQUENCE', 'MATCHING'].includes(interactiveContent.type) && (
-                <p>Great job completing this interactive activity!</p>
-              )}
-            </div>
+        {/* Type-Specific Feedback */}
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h4 className="font-medium text-blue-800 mb-2">Activity Summary</h4>
+          <div className="text-blue-700 text-sm">
+            <InteractiveTypeFeedback 
+              type={interactiveContent.type}
+              content={interactiveContent.content}
+              score={score || 0}
+              responses={attempt.responses}
+            />
           </div>
-        )}
+        </div>
 
         {/* Actions */}
         <div className="flex justify-center space-x-4">
@@ -219,7 +261,10 @@ export function InteractiveResults({
           
           {canRetry && onRetry && (
             <Button
-              onClick={onRetry}
+              onClick={() => {
+                onRetry();
+                onClose();
+              }}
               className={`${
                 passed 
                   ? 'bg-school-primary-blue hover:bg-school-primary-blue/90' 
@@ -237,28 +282,28 @@ export function InteractiveResults({
           {passed ? (
             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
               <p className="text-green-800 font-medium">
-                🎉 Excellent work! You've successfully completed this interactive activity.
+                🎉 Outstanding! You've mastered this interactive activity.
               </p>
               <p className="text-green-600 text-sm mt-1">
-                You've demonstrated great understanding of the material!
+                Your understanding of the material is excellent!
               </p>
             </div>
           ) : canRetry ? (
             <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
               <p className="text-orange-800 font-medium">
-                Keep trying! Learning is a process.
+                💪 Great effort! Learning takes practice.
               </p>
               <p className="text-orange-600 text-sm mt-1">
-                Review the content and try the activity again to improve your score.
+                Review the activity and try again to improve your performance.
               </p>
             </div>
           ) : (
             <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
               <p className="text-gray-800 font-medium">
-                Activity completed!
+                ✅ Activity completed!
               </p>
               <p className="text-gray-600 text-sm mt-1">
-                You can continue with the next lesson in your learning journey.
+                Continue with your learning journey in the next lesson.
               </p>
             </div>
           )}
@@ -266,4 +311,62 @@ export function InteractiveResults({
       </div>
     </div>
   );
+}
+
+// Type-specific feedback component
+function InteractiveTypeFeedback({ type, content, score, responses }: any) {
+  switch (type) {
+    case 'DRAG_DROP':
+      const dragDropItems = content.items?.length || 0;
+      const correctPlacements = Math.round((score / 100) * dragDropItems);
+      return (
+        <p>You correctly placed {correctPlacements} out of {dragDropItems} items in their proper locations.</p>
+      );
+      
+    case 'HOTSPOT':
+      const hotspots = content.hotspots?.length || 0;
+      const foundHotspots = Math.round((score / 100) * hotspots);
+      return (
+        <p>You successfully identified {foundHotspots} out of {hotspots} correct areas in the image.</p>
+      );
+      
+    case 'SEQUENCE':
+      const sequenceItems = content.items?.length || 0;
+      const correctOrder = Math.round((score / 100) * sequenceItems);
+      return (
+        <p>You arranged {correctOrder} out of {sequenceItems} items in the correct chronological order.</p>
+      );
+      
+    case 'MATCHING':
+      const matchingPairs = content.leftItems?.length || 0;
+      const correctMatches = Math.round((score / 100) * matchingPairs);
+      return (
+        <p>You made {correctMatches} out of {matchingPairs} correct matches between the items.</p>
+      );
+      
+    case 'TIMELINE':
+      const timelineEvents = content.events?.length || 0;
+      const correctTimelinePlacements = Math.round((score / 100) * timelineEvents);
+      return (
+        <p>You placed {correctTimelinePlacements} out of {timelineEvents} events correctly on the timeline.</p>
+      );
+      
+    case 'SIMULATION':
+      const choices = responses?.choiceHistory?.length || 0;
+      const correctChoices = responses?.choiceHistory?.filter((c: any) => c.isCorrect)?.length || 0;
+      return (
+        <p>You made {correctChoices} out of {choices} optimal decisions in the simulation scenario.</p>
+      );
+      
+    case 'INTERACTIVE_VIDEO':
+      const interactions = responses?.completedInteractions?.length || 0;
+      return (
+        <p>You completed {interactions} interactive elements and achieved {score.toFixed(1)}% overall performance.</p>
+      );
+      
+    default:
+      return (
+        <p>You achieved {score.toFixed(1)}% performance in this interactive activity. Great work!</p>
+      );
+  }
 }
