@@ -15,7 +15,8 @@ import {
 	Calendar,
 	Zap,
 	XCircle,
-	CirclePlus,	
+	CirclePlus,
+	X,
 } from "lucide-react";
 
 interface InteractivePlayerProps {
@@ -903,18 +904,172 @@ function SequenceRenderer({ content, responses, onUpdate }: any) {
 }
 
 
-// Placeholder renderers for other interactive types
 
 function MatchingRenderer({ content, responses, onUpdate }: any) {
   const leftItems = content.leftItems || [];
   const rightItems = content.rightItems || [];
-  const matches = responses.matches || {};
+  const [matches, setMatches] = useState(responses.matches || {});
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ [key: string]: { message: string; isCorrect: boolean } }>({});
+  const [showFeedback, setShowFeedback] = useState(false);
 
-  const handleMatch = (leftItemId: string, rightItemId: string) => {
+  const allowRetries = content.allowRetries !== false;
+  const showImmediateFeedback = content.feedbackTiming === 'immediate' || content.showFeedback !== false;
+
+  const handleDragStart = (leftItemId: string) => {
+    setDraggedItem(leftItemId);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, rightItemId: string) => {
+		e.preventDefault();
+		
+		if (!draggedItem) return;
+		
+		console.log('=== MATCHING DEBUG ===');
+		console.log('Dropped item ID:', draggedItem);
+		console.log('Target ID:', rightItemId);
+		
+		// Find the left item being dragged
+		const leftItem = leftItems.find((item: any) => item.id === draggedItem);
+		console.log('Left item:', leftItem);
+		console.log('Left item correctMatch:', leftItem?.correctMatch);
+		console.log('Are IDs equal?', leftItem?.correctMatch === rightItemId);
+		console.log('Type check - correctMatch type:', typeof leftItem?.correctMatch);
+		console.log('Type check - rightItemId type:', typeof rightItemId);
+		
+		// Check if this right item is already matched (and retries not allowed)
+		if (!allowRetries && Object.values(matches).includes(rightItemId)) {
+			console.log('Right item already matched and retries not allowed');
+			return;
+		}
+
+		// Check if this left item is already matched (and retries not allowed)
+		if (!allowRetries && matches[draggedItem]) {
+			console.log('Left item already matched and retries not allowed');
+			return;
+		}
+
+		const newMatches = { ...matches };
+		newMatches[draggedItem] = rightItemId;
+		
+		setMatches(newMatches);
+		onUpdate({ ...responses, matches: newMatches });
+
+		// Show immediate feedback if enabled
+		if (showImmediateFeedback) {
+			// Convert both to strings for comparison to ensure type consistency
+			const isCorrect = leftItem && String(leftItem.correctMatch) === String(rightItemId);
+			console.log('Is correct match?', isCorrect);
+			console.log('Comparison:', String(leftItem?.correctMatch), '===', String(rightItemId));
+			
+			const newFeedback = { ...feedback };
+			newFeedback[draggedItem] = {
+				message: isCorrect ? 'Correct match!' : 'Try again...',
+				isCorrect: isCorrect
+			};
+			
+			setFeedback(newFeedback);
+			setShowFeedback(true);
+			
+			// Hide feedback after 2 seconds
+			setTimeout(() => setShowFeedback(false), 2000);
+		}
+
+		setDraggedItem(null);
+		console.log('======================');
+	};
+
+  const handleDirectMatch = (leftItemId: string, rightItemId: string) => {
+		console.log('=== DIRECT MATCH DEBUG ===');
+		console.log('Left item ID:', leftItemId);
+		console.log('Right item ID:', rightItemId);
+		
+		// Check if this right item is already matched (and retries not allowed)
+		if (!allowRetries && Object.values(matches).includes(rightItemId)) {
+			return;
+		}
+
+		// Check if this left item is already matched (and retries not allowed)
+		if (!allowRetries && matches[leftItemId]) {
+			return;
+		}
+
+		const newMatches = { ...matches };
+		newMatches[leftItemId] = rightItemId;
+		
+		setMatches(newMatches);
+		onUpdate({ ...responses, matches: newMatches });
+
+		// Show immediate feedback if enabled
+		if (showImmediateFeedback) {
+			const leftItem = leftItems.find((item: any) => item.id === leftItemId);
+			console.log('Left item found:', leftItem);
+			console.log('Left item correctMatch:', leftItem?.correctMatch);
+			
+			// Convert both to strings for comparison
+			const isCorrect = leftItem && String(leftItem.correctMatch) === String(rightItemId);
+			console.log('Is correct?', isCorrect);
+			
+			const newFeedback = { ...feedback };
+			newFeedback[leftItemId] = {
+				message: isCorrect ? 'Correct match!' : 'Try again...',
+				isCorrect: isCorrect
+			};
+			
+			setFeedback(newFeedback);
+			setShowFeedback(true);
+			
+			setTimeout(() => setShowFeedback(false), 2000);
+		}
+		console.log('===========================');
+	};
+
+  const clearMatch = (leftItemId: string) => {
+    if (!allowRetries) return;
+    
     const newMatches = { ...matches };
-    newMatches[leftItemId] = rightItemId;
+    delete newMatches[leftItemId];
+    setMatches(newMatches);
     onUpdate({ ...responses, matches: newMatches });
   };
+
+  const getCorrectMatches = () => {
+		return Object.keys(matches).filter(leftItemId => {
+			const leftItem = leftItems.find((item: any) => item.id === leftItemId);
+			const userMatch = matches[leftItemId];
+			const isCorrect = leftItem && String(leftItem.correctMatch) === String(userMatch);
+			
+			console.log('Checking match for:', leftItem?.text);
+			console.log('Expected:', leftItem?.correctMatch, 'Got:', userMatch);
+			console.log('Match result:', isCorrect);
+			
+			return isCorrect;
+		}).length;
+	};
+
+  const getTotalPossibleMatches = () => {
+    return leftItems.filter((item: any) => item.correctMatch).length;
+  };
+
+  const isRightItemUsed = (rightItemId: string) => {
+    return Object.values(matches).includes(rightItemId);
+  };
+
+  const getRightItemById = (rightItemId: string) => {
+    return rightItems.find((item: any) => item.id === rightItemId);
+  };
+
+  const getLeftItemById = (leftItemId: string) => {
+    return leftItems.find((item: any) => item.id === leftItemId);
+  };
+
+  const correctMatches = getCorrectMatches();
+  const totalMatches = getTotalPossibleMatches();
+  const isComplete = Object.keys(matches).length === leftItems.length;
 
   return (
     <div className="space-y-6">
@@ -922,75 +1077,238 @@ function MatchingRenderer({ content, responses, onUpdate }: any) {
         <h3 className="text-lg font-semibold text-school-primary-blue mb-2">
           Matching Activity
         </h3>
-        <p className="text-gray-600">Match items from the left column to the right column</p>
+        <p className="text-gray-600">Drag items from the left to match them with items on the right</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-        {/* Left Column */}
-        <div className="space-y-3">
-          <h4 className="font-medium text-purple-600 text-center">Items to Match</h4>
-          {leftItems.map((item: any) => (
-            <div
-              key={item.id}
-              className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                matches[item.id] 
-                  ? 'bg-green-50 border-green-300' 
-                  : 'bg-gray-50 border-gray-300 hover:border-purple-400'
-              }`}
-            >
-              <div className="font-medium">{item.text}</div>
-              {matches[item.id] && (
-                <div className="text-sm text-green-600 mt-1">
-                  Matched with: {rightItems.find((ri: any) => ri.id === matches[item.id])?.text}
+      {/* Progress Indicator */}
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-gray-700">Progress</span>
+          <span className="text-sm text-gray-600">
+            {correctMatches} of {totalMatches} correct matches
+          </span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div 
+            className={`h-2 rounded-full transition-all duration-300 ${
+              correctMatches === totalMatches && isComplete ? 'bg-green-500' : 'bg-blue-500'
+            }`}
+            style={{ width: `${totalMatches > 0 ? (correctMatches / totalMatches) * 100 : 0}%` }}
+          ></div>
+        </div>
+        {correctMatches === totalMatches && isComplete && (
+          <div className="flex items-center mt-2 text-green-600">
+            <CheckCircle className="w-4 h-4 mr-1" />
+            <span className="text-sm font-medium">All matches completed! Ready to submit.</span>
+          </div>
+        )}
+      </div>
+
+      {/* Matching Interface */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
+        {/* Left Column - Items to Match */}
+        <div>
+          <h4 className="font-medium text-green-600 text-center mb-4">Items to Match</h4>
+          <div className="space-y-3">
+            {leftItems.map((item: any) => {
+              const isMatched = !!matches[item.id];
+              const matchedRightItem = isMatched ? getRightItemById(matches[item.id]) : null;
+              const isCorrect = isMatched && item.correctMatch === matches[item.id];
+              
+              return (
+                <div
+                  key={item.id}
+                  draggable
+                  onDragStart={() => handleDragStart(item.id)}
+                  className={`p-4 border-2 rounded-lg cursor-move transition-all ${
+                    isMatched
+                      ? isCorrect
+                        ? 'border-green-300 bg-green-50'
+                        : 'border-red-300 bg-red-50'
+                      : 'border-gray-300 bg-white hover:border-blue-400 hover:shadow-md'
+                  } ${draggedItem === item.id ? 'opacity-50 scale-95' : ''}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900">{item.text}</div>
+                      {isMatched && matchedRightItem && (
+                        <div className="text-sm text-gray-600 mt-1">
+                          Matched with: {matchedRightItem.text}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {isMatched && (
+                        <>
+                          {isCorrect ? (
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                          ) : (
+                            <XCircle className="w-5 h-5 text-red-500" />
+                          )}
+                          
+                          {allowRetries && (
+                            <Button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                clearMatch(item.id);
+                              }}
+                              size="sm"
+                              variant="outline"
+                              className="text-gray-600"
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </>
+                      )}
+                      
+                      {!isMatched && (
+                        <div className="text-gray-400">
+                          <Move className="w-4 h-4" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+              );
+            })}
+          </div>
         </div>
 
-        {/* Right Column */}
-        <div className="space-y-3">
-          <h4 className="font-medium text-purple-600 text-center">Match Targets</h4>
-          {rightItems.map((item: any) => {
-            const isUsed = Object.values(matches).includes(item.id);
+        {/* Right Column - Match Targets */}
+        <div>
+          <h4 className="font-medium text-purple-600 text-center mb-4">Match Targets</h4>
+          <div className="space-y-3">
+            {rightItems.map((item: any) => {
+              const isUsed = isRightItemUsed(item.id);
+              const matchingLeftItem = isUsed ? Object.keys(matches).find(leftId => matches[leftId] === item.id) : null;
+              const leftItem = matchingLeftItem ? getLeftItemById(matchingLeftItem) : null;
+              const isCorrectMatch = isUsed && leftItem && leftItem.correctMatch === item.id;
+              
+              return (
+                <div
+                  key={item.id}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, item.id)}
+                  className={`p-4 border-2 rounded-lg transition-all min-h-[80px] ${
+                    isUsed
+                      ? isCorrectMatch
+                        ? 'border-green-300 bg-green-50'
+                        : 'border-red-300 bg-red-50'
+                      : 'border-dashed border-gray-300 bg-gray-50 hover:border-purple-400 hover:bg-purple-50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900">{item.text}</div>
+                      {item.description && (
+                        <div className="text-sm text-gray-600 mt-1">{item.description}</div>
+                      )}
+                      {isUsed && leftItem && (
+                        <div className="text-sm text-gray-600 mt-2">
+                          Matched with: {leftItem.text}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="ml-3">
+                      {isUsed ? (
+                        isCorrectMatch ? (
+                          <CheckCircle className="w-5 h-5 text-green-500" />
+                        ) : (
+                          <XCircle className="w-5 h-5 text-red-500" />
+                        )
+                      ) : (
+                        <div className="w-5 h-5 border-2 border-dashed border-gray-400 rounded"></div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile-Friendly Alternative */}
+      <div className="lg:hidden">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="font-medium text-blue-800 mb-3">Alternative: Tap to Match</h4>
+          <div className="space-y-3">
+            {leftItems.filter((item: any) => !matches[item.id]).map((item: any) => (
+              <div key={item.id} className="bg-white border border-gray-300 rounded-lg p-3">
+                <div className="font-medium text-gray-900 mb-2">{item.text}</div>
+                <div className="grid grid-cols-1 gap-2">
+                  {rightItems.filter(rightItem => !isRightItemUsed(rightItem.id)).map((rightItem: any) => (
+                    <Button
+                      key={rightItem.id}
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDirectMatch(item.id, rightItem.id);
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="text-left justify-start"
+                    >
+                      {rightItem.text}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Feedback Display */}
+      {showFeedback && showImmediateFeedback && Object.keys(feedback).length > 0 && (
+        <div className="fixed top-4 right-4 z-50 space-y-2">
+          {Object.entries(feedback).map(([leftItemId, feedbackData]) => {
+            const leftItem = getLeftItemById(leftItemId);
             return (
               <div
-                key={item.id}
-                className={`p-4 border rounded-lg transition-colors ${
-                  isUsed 
-                    ? 'bg-blue-50 border-blue-300' 
-                    : 'bg-gray-50 border-gray-300 hover:border-purple-400 cursor-pointer'
+                key={leftItemId}
+                className={`p-3 rounded-lg shadow-lg max-w-xs ${
+                  feedbackData.isCorrect 
+                    ? 'bg-green-500 text-white' 
+                    : 'bg-red-500 text-white'
                 }`}
-                onClick={() => {
-                  if (!isUsed) {
-                    // Find unmatched left item and match it
-                    const unmatchedLeft = leftItems.find((li: any) => !matches[li.id]);
-                    if (unmatchedLeft) {
-                      handleMatch(unmatchedLeft.id, item.id);
-                    }
-                  }
-                }}
               >
-                <div className="font-medium">{item.text}</div>
-                {isUsed && (
-                  <div className="text-sm text-blue-600 mt-1">
-                    ✓ Matched
+                <div className="flex items-center">
+                  {feedbackData.isCorrect ? (
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                  ) : (
+                    <XCircle className="w-4 h-4 mr-2" />
+                  )}
+                  <div>
+                    <div className="text-sm font-medium">{feedbackData.message}</div>
+                    <div className="text-xs opacity-90">{leftItem?.text}</div>
                   </div>
-                )}
+                </div>
               </div>
             );
           })}
         </div>
-      </div>
+      )}
 
-      <div className="text-center">
-        <p className="text-sm text-gray-600">
-          Matched: {Object.keys(matches).length} of {leftItems.length}
-        </p>
+      {/* Instructions */}
+      <div className="text-center text-sm text-gray-600 space-y-1">
+        <p>💡 <strong>How to match:</strong></p>
+        <p>• Drag items from left to right columns</p>
+        <p>• On mobile, use the "Tap to Match" section below</p>
+        {allowRetries && <p>• Click ✕ to clear a match and try again</p>}
+        <p>• Match all items correctly to complete the activity</p>
       </div>
     </div>
   );
 }
+
+// Placeholder renderers for other interactive types
 
 function TimelineRenderer({ content, responses, onUpdate }: any) {
   return (

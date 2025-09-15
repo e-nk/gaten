@@ -187,18 +187,40 @@ function calculateMatchingScore(content: any, responses: any): number {
   const leftItems = content.leftItems || [];
   const userMatches = responses.matches || {};
   
-  let correctCount = 0;
+  console.log('=== BACKEND MATCHING SCORE DEBUG ===');
+  console.log('Left items:', leftItems);
+  console.log('User matches:', userMatches);
   
-  leftItems.forEach((item: any) => {
-    const userMatch = userMatches[item.id];
-    const correctMatch = item.correctMatch;
-    
-    if (userMatch === correctMatch) {
-      correctCount++;
+  if (leftItems.length === 0) return 0;
+  
+  // Count correct matches
+  let correctMatches = 0;
+  let totalExpectedMatches = 0;
+  
+  leftItems.forEach((leftItem: any) => {
+    if (leftItem.correctMatch) {
+      totalExpectedMatches++;
+      const userMatch = userMatches[leftItem.id];
+      
+      // Convert both to strings for comparison
+      const isCorrect = String(leftItem.correctMatch) === String(userMatch);
+      
+      console.log(`Item "${leftItem.text}": expected ${leftItem.correctMatch}, got ${userMatch}, correct: ${isCorrect}`);
+      
+      if (isCorrect) {
+        correctMatches++;
+      }
     }
   });
   
-  return leftItems.length > 0 ? Math.round((correctCount / leftItems.length) * 100) : 0;
+  console.log(`Correct matches: ${correctMatches}/${totalExpectedMatches}`);
+  
+  // Calculate score as percentage of correct matches
+  const score = totalExpectedMatches > 0 ? Math.round((correctMatches / totalExpectedMatches) * 100) : 0;
+  console.log('Final score:', score);
+  console.log('=====================================');
+  
+  return score;
 }
 
 function calculateTimelineScore(content: any, responses: any): number {

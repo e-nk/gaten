@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Plus, X, Settings, Eye, Move, Target, List, Calendar, Zap, Globe, Upload, CirclePlus, RotateCcw } from "lucide-react";
+import { CheckCircle, Plus, X, Settings, Eye, Move, Target, List, Calendar, Zap, Globe, Upload, CirclePlus, RotateCcw, AlertTriangle, Info } from "lucide-react";
 
 interface InteractiveBuilderProps {
   onSave: (interactiveData: any) => void;
@@ -1441,16 +1441,481 @@ function SequenceEditor({ content, onUpdate }: { content: any; onUpdate: (field:
   );
 }
 
-// Placeholder editors for other types
 function MatchingEditor({ content, onUpdate }: { content: any; onUpdate: (field: string, value: any) => void }) {
+  const [leftItems, setLeftItems] = useState(content.leftItems || []);
+  const [rightItems, setRightItems] = useState(content.rightItems || []);
+  const [showInstructions, setShowInstructions] = useState(true);
+
+  const addLeftItem = () => {
+		const newItem = {
+			id: String(Date.now()), // Ensure ID is always a string
+			text: '',
+			correctMatch: null
+		};
+		const newLeftItems = [...leftItems, newItem];
+		setLeftItems(newLeftItems);
+		onUpdate('leftItems', newLeftItems);
+	};
+
+	const addRightItem = () => {
+		const newItem = {
+			id: String(Date.now()), // Ensure ID is always a string
+			text: '',
+			description: ''
+		};
+		const newRightItems = [...rightItems, newItem];
+		setRightItems(newRightItems);
+		onUpdate('rightItems', newRightItems);
+	};
+
+  const updateLeftItem = (index: number, field: string, value: any) => {
+    const newLeftItems = [...leftItems];
+    newLeftItems[index] = { ...newLeftItems[index], [field]: value };
+    setLeftItems(newLeftItems);
+    onUpdate('leftItems', newLeftItems);
+  };
+
+  const updateRightItem = (index: number, field: string, value: any) => {
+    const newRightItems = [...rightItems];
+    newRightItems[index] = { ...newRightItems[index], [field]: value };
+    setRightItems(newRightItems);
+    onUpdate('rightItems', newRightItems);
+  };
+
+  const removeLeftItem = (index: number) => {
+    const removedItem = leftItems[index];
+    const newLeftItems = leftItems.filter((_: any, i: number) => i !== index);
+    setLeftItems(newLeftItems);
+    onUpdate('leftItems', newLeftItems);
+  };
+
+  const removeRightItem = (index: number) => {
+    const removedItem = rightItems[index];
+    const newRightItems = rightItems.filter((_: any, i: number) => i !== index);
+    
+    // Remove this right item from any left item's correctMatch
+    const updatedLeftItems = leftItems.map((leftItem: any) => ({
+      ...leftItem,
+      correctMatch: leftItem.correctMatch === removedItem.id ? null : leftItem.correctMatch
+    }));
+    
+    setRightItems(newRightItems);
+    setLeftItems(updatedLeftItems);
+    onUpdate('rightItems', newRightItems);
+    onUpdate('leftItems', updatedLeftItems);
+  };
+
+  const getRightItemText = (rightItemId: string) => {
+    const rightItem = rightItems.find((item: any) => item.id === rightItemId);
+    return rightItem ? rightItem.text : 'Unknown';
+  };
+
+  const getUnmatchedLeftItems = () => {
+    return leftItems.filter((item: any) => !item.correctMatch);
+  };
+
+  const getUnusedRightItems = () => {
+    const usedRightIds = leftItems.map((item: any) => item.correctMatch).filter(Boolean);
+    return rightItems.filter((item: any) => !usedRightIds.includes(item.id));
+  };
+
   return (
-    <div className="text-center py-8 text-gray-500">
-      <Globe className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-      <p>Matching editor: Create pairs of items to match</p>
-      <p className="text-sm mt-2">Will include left/right column management and correct pair configuration</p>
+    <div className="space-y-6">
+      {/* Instructions */}
+      {showInstructions && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-start justify-between">
+            <div className="flex">
+              <Globe className="w-5 h-5 text-green-600 mr-2 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-green-800 mb-1">How Matching Activities Work</h4>
+                <ul className="text-sm text-green-700 space-y-1">
+                  <li>• Create items for the left column (things to be matched)</li>
+                  <li>• Create items for the right column (match targets)</li>
+                  <li>• Set which right item each left item should match to</li>
+                  <li>• Students will drag from left to right to make connections</li>
+                </ul>
+              </div>
+            </div>
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowInstructions(false);
+              }}
+              size="sm"
+              variant="outline"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Left Column Items */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-medium text-school-primary-blue">Items to Match</h4>
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                addLeftItem();
+              }}
+              size="sm"
+              variant="outline"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Add Item
+            </Button>
+          </div>
+
+          {leftItems.length === 0 ? (
+            <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-300 rounded-lg">
+              <Globe className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+              <p className="mb-3">No items to match yet</p>
+              <Button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  addLeftItem();
+                }}
+                size="sm"
+                className="bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Add First Item
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {leftItems.map((item: any, index: number) => (
+                <div
+                  key={item.id}
+                  className="bg-white border border-gray-300 rounded-lg p-4"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 mr-3">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Item Text *
+                        </label>
+                        <input
+                          type="text"
+                          value={item.text}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            updateLeftItem(index, 'text', e.target.value);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+                          placeholder={`Item ${index + 1}`}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          removeLeftItem(index);
+                        }}
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600 hover:bg-red-50"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Correct Match *
+                      </label>
+                      <select
+												value={item.correctMatch || ''}
+												onChange={(e) => {
+													e.stopPropagation();
+													// Ensure we're storing the ID as a string
+													const selectedValue = e.target.value;
+													updateLeftItem(index, 'correctMatch', selectedValue || null);
+												}}
+												onClick={(e) => e.stopPropagation()}
+												className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+											>
+												<option value="">Select match target...</option>
+												{rightItems.map((rightItem: any) => (
+													<option key={rightItem.id} value={rightItem.id}>
+														{rightItem.text || `Right Item ${rightItems.indexOf(rightItem) + 1}`}
+													</option>
+												))}
+											</select>
+                      {item.correctMatch && (
+                        <div className="mt-1 text-xs text-green-600">
+                          ✓ Matches: {getRightItemText(item.correctMatch)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+							</div>
+          )}
+        </div>
+
+        {/* Right Column Items */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-medium text-school-primary-blue">Match Targets</h4>
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                addRightItem();
+              }}
+              size="sm"
+              variant="outline"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Add Target
+            </Button>
+          </div>
+
+          {rightItems.length === 0 ? (
+            <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-300 rounded-lg">
+              <Target className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+              <p className="mb-3">No match targets yet</p>
+              <Button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  addRightItem();
+                }}
+                size="sm"
+                className="bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Add First Target
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {rightItems.map((item: any, index: number) => {
+                const isUsed = leftItems.some((leftItem: any) => leftItem.correctMatch === item.id);
+                return (
+                  <div
+                    key={item.id}
+                    className={`border rounded-lg p-4 ${
+                      isUsed ? 'bg-green-50 border-green-300' : 'bg-white border-gray-300'
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 mr-3">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Target Text *
+                          </label>
+                          <input
+                            type="text"
+                            value={item.text}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              updateRightItem(index, 'text', e.target.value);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+                            placeholder={`Target ${index + 1}`}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            removeRightItem(index);
+                          }}
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 hover:bg-red-50"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Description (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={item.description || ''}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            updateRightItem(index, 'description', e.target.value);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+                          placeholder="Additional context"
+                        />
+                      </div>
+
+                      {isUsed && (
+                        <div className="text-xs text-green-600 flex items-center">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Used as a match target
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Validation Warnings */}
+      {(leftItems.length > 0 || rightItems.length > 0) && (
+        <div className="space-y-3">
+          {getUnmatchedLeftItems().length > 0 && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <div className="flex items-center">
+                <AlertTriangle className="w-4 h-4 text-yellow-600 mr-2" />
+                <span className="text-sm text-yellow-800">
+                  {getUnmatchedLeftItems().length} item{getUnmatchedLeftItems().length !== 1 ? 's' : ''} need{getUnmatchedLeftItems().length === 1 ? 's' : ''} a match target assigned
+                </span>
+              </div>
+            </div>
+          )}
+
+          {getUnusedRightItems().length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-center">
+                <Info className="w-4 h-4 text-blue-600 mr-2" />
+                <span className="text-sm text-blue-800">
+                  {getUnusedRightItems().length} target{getUnusedRightItems().length !== 1 ? 's' : ''} {getUnusedRightItems().length === 1 ? 'is' : 'are'} not used (will serve as distractors)
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Preview */}
+      {leftItems.length > 0 && rightItems.length > 0 && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <h4 className="font-medium text-school-primary-blue mb-3">Preview (Correct Matches)</h4>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h5 className="text-sm font-medium text-gray-700 mb-2">Items to Match</h5>
+              <div className="space-y-2">
+                {leftItems.map((item: any, index: number) => (
+                  <div
+                    key={item.id}
+                    className="bg-white border border-gray-200 rounded p-2 text-sm"
+                  >
+                    {item.text || `Item ${index + 1}`}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h5 className="text-sm font-medium text-gray-700 mb-2">Match Targets</h5>
+              <div className="space-y-2">
+                {rightItems.map((item: any, index: number) => {
+                  const isCorrectMatch = leftItems.some((leftItem: any) => leftItem.correctMatch === item.id);
+                  return (
+                    <div
+                      key={item.id}
+                      className={`border rounded p-2 text-sm ${
+                        isCorrectMatch 
+                          ? 'bg-green-100 border-green-300 text-green-800' 
+                          : 'bg-white border-gray-200'
+                      }`}
+                    >
+                      {item.text || `Target ${index + 1}`}
+                      {isCorrectMatch && (
+                        <span className="ml-2 text-xs">✓ Correct match</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 text-xs text-gray-600">
+            <p>💡 <strong>Note:</strong> Students will see these shuffled and need to connect left items to the correct right targets.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Activity Settings */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <h4 className="font-medium text-school-primary-blue mb-3">Matching Settings</h4>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Allow Multiple Attempts
+            </label>
+            <select
+              value={content.allowRetries !== false ? 'true' : 'false'}
+              onChange={(e) => {
+                e.stopPropagation();
+                onUpdate('allowRetries', e.target.value === 'true');
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+            >
+              <option value="true">Allow students to retry incorrect matches</option>
+              <option value="false">Lock matches once made</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Show Feedback
+            </label>
+            <select
+              value={content.showFeedback !== false ? 'immediate' : 'none'}
+              onChange={(e) => {
+                e.stopPropagation();
+                onUpdate('showFeedback', e.target.value !== 'none');
+                onUpdate('feedbackTiming', e.target.value);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+            >
+              <option value="immediate">Show feedback immediately</option>
+              <option value="end">Show feedback at end only</option>
+              <option value="none">No feedback</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-3 text-xs text-gray-600">
+          <p><strong>Settings Help:</strong></p>
+          <ul className="list-disc list-inside space-y-1 mt-1">
+            <li><strong>Multiple Attempts:</strong> Whether students can change their matches after making them</li>
+            <li><strong>Immediate Feedback:</strong> Students see if matches are correct right away</li>
+            <li><strong>End Feedback:</strong> Students only see results after completing all matches</li>
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
+
+
+// Placeholder editors for other types
 
 function TimelineEditor({ content, onUpdate }: { content: any; onUpdate: (field: string, value: any) => void }) {
   return (
