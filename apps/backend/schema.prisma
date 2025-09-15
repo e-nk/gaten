@@ -372,7 +372,7 @@ model AssignmentSubmission {
   assignmentId String
   
 	// Submission data
-  content      String
+  content      String?
 	fileUrl     String? // File submission URL
   fileName    String? // Original file name
   submittedAt DateTime @default(now())
