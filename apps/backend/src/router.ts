@@ -1593,7 +1593,7 @@ createInteractiveContent: publicProcedure
   .input(z.object({
     title: z.string().min(1, 'Title is required'),
     description: z.string().optional(),
-    type: z.enum(['DRAG_DROP', 'HOTSPOT', 'SEQUENCE', 'MATCHING', 'TIMELINE', 'SIMULATION', 'WIDGET', 'H5P']),
+    type: z.enum(['DRAG_DROP', 'HOTSPOT', 'SEQUENCE', 'MATCHING', 'TIMELINE', 'SIMULATION', 'WIDGET', 'H5P', 'INTERACTIVE_VIDEO']),
     config: z.any(), // JSON configuration
     content: z.any(), // JSON content data
     lessonId: z.string(),

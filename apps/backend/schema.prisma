@@ -598,4 +598,5 @@ enum InteractiveType {
   SIMULATION       // Custom simulations
   WIDGET           // Custom interactive widgets
   H5P              // H5P content integration
+	INTERACTIVE_VIDEO // Interactive videos with embedded elements
 }

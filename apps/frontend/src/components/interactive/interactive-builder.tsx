@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Plus, X, Settings, Eye, Move, Target, List, Calendar, Zap, Globe, Upload, CirclePlus, RotateCcw, AlertTriangle, Info } from "lucide-react";
+import { CheckCircle, Plus, X, Settings, Eye, Move, Target, List, Calendar, Zap, Globe, Upload, CirclePlus, RotateCcw, AlertTriangle, Info, Play, GitBranch, FileText, Pause, HelpCircle } from "lucide-react";
 
 interface InteractiveBuilderProps {
   onSave: (interactiveData: any) => void;
@@ -33,6 +33,7 @@ export function InteractiveBuilder({ onSave, initialData }: InteractiveBuilderPr
     { value: 'MATCHING', label: 'Matching', icon: Globe, description: 'Match pairs of items' },
     { value: 'TIMELINE', label: 'Timeline', icon: Calendar, description: 'Interactive timeline activity' },
     { value: 'SIMULATION', label: 'Simulation', icon: Zap, description: 'Custom interactive simulation' },
+		{ value: 'INTERACTIVE_VIDEO', label: 'Interactive Video', icon: Play, description: 'Videos with embedded interactions' },
   ];
 
   const handleSave = (e?: React.MouseEvent) => {
@@ -171,6 +172,34 @@ export function InteractiveBuilder({ onSave, initialData }: InteractiveBuilderPr
         }
       }
       break;
+			case 'INTERACTIVE_VIDEO':
+      if (!content.videoUrl) {
+        alert('Please upload a video for the interactive video lesson');
+        return false;
+      }
+      if (!content.interactions || content.interactions.length === 0) {
+        alert('Please add at least one interactive element to the video');
+        return false;
+      }
+      // Validate interactions have required content
+      const invalidInteractions = content.interactions.filter((interaction: any) => {
+        switch (interaction.type) {
+          case 'quiz':
+            return !interaction.data?.question || !interaction.data?.options?.every((opt: string) => opt.trim());
+          case 'note':
+            return !interaction.data?.title || !interaction.data?.content;
+          case 'choice':
+            return !interaction.data?.question || !interaction.data?.options?.every((opt: any) => opt.text?.trim());
+          default:
+            return false;
+        }
+      });
+      if (invalidInteractions.length > 0) {
+        alert('Please complete all interactive elements (questions, titles, options, etc.)');
+        return false;
+      }
+      break;
+      
       
     default:
       // Basic content check for other types
@@ -519,6 +548,8 @@ function InteractiveContentEditor({
       return <TimelineEditor content={content} onUpdate={onContentUpdate} />;
     case 'SIMULATION':
       return <SimulationEditor content={content} onUpdate={onContentUpdate} />;
+    case 'INTERACTIVE_VIDEO':
+      return <InteractiveVideoEditor content={content} onUpdate={onContentUpdate} />;
     default:
       return (
         <div className="text-center py-8 text-gray-500">
@@ -2988,6 +3019,628 @@ function SimulationEditor({ content, onUpdate }: { content: any; onUpdate: (fiel
   );
 }
 
+function InteractiveVideoEditor({ content, onUpdate }: { content: any; onUpdate: (field: string, value: any) => void }) {
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [interactions, setInteractions] = useState(content.interactions || []);
+  const [showInstructions, setShowInstructions] = useState(true);
+  const [previewTime, setPreviewTime] = useState(0);
+
+  const videoUrl = content.videoUrl || '';
+  const videoDuration = content.videoDuration || 0;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const interactionTypes = [
+    { value: 'quiz', label: 'Quiz Question', description: 'Multiple choice or true/false questions' },
+    { value: 'hotspot', label: 'Video Hotspot', description: 'Clickable areas on the video' },
+    { value: 'choice', label: 'Branching Choice', description: 'Choose your path decisions' },
+    { value: 'note', label: 'Information Note', description: 'Additional context or explanations' },
+    { value: 'pause', label: 'Mandatory Pause', description: 'Force students to pause and reflect' }
+  ];
+
+  const handleVideoUpload = async (file: File) => {
+    if (!file.type.startsWith('video/')) {
+      alert('Please select a video file');
+      return;
+    }
+
+    if (file.size > 500 * 1024 * 1024) { // 500MB limit
+      alert('Video size must be less than 500MB');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      const formData = new FormData();
+      formData.append('video', file);
+
+      const xhr = new XMLHttpRequest();
+      
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const progress = Math.round((e.loaded / e.total) * 100);
+          setUploadProgress(progress);
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 200) {
+          const response = JSON.parse(xhr.responseText);
+          onUpdate('videoUrl', response.url);
+          onUpdate('videoDuration', response.duration);
+          console.log('Video uploaded successfully:', response.url);
+        } else {
+          throw new Error(`Upload failed: ${xhr.status}`);
+        }
+        setIsUploading(false);
+        setUploadProgress(0);
+        setVideoFile(null);
+      });
+
+      xhr.addEventListener('error', () => {
+        alert('Upload failed. Please check your connection and try again.');
+        setIsUploading(false);
+        setUploadProgress(0);
+      });
+
+      xhr.open('POST', 'http://localhost:4000/api/upload/interactive-video');
+      xhr.send(formData);
+
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to upload video. Please try again.');
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const addInteraction = (type: string) => {
+    const newInteraction = {
+      id: String(Date.now()),
+      type,
+      timestamp: previewTime,
+      title: '',
+      content: '',
+      duration: 5, // seconds to show
+      required: type === 'quiz' || type === 'choice',
+      position: { x: 50, y: 50 }, // percentage position on video
+      data: getDefaultInteractionData(type)
+    };
+
+    const newInteractions = [...interactions, newInteraction].sort((a, b) => a.timestamp - b.timestamp);
+    setInteractions(newInteractions);
+    onUpdate('interactions', newInteractions);
+  };
+
+  const getDefaultInteractionData = (type: string) => {
+    switch (type) {
+      case 'quiz':
+        return {
+          question: '',
+          questionType: 'multiple-choice',
+          options: ['', '', '', ''],
+          correctAnswer: 0,
+          explanation: ''
+        };
+      case 'hotspot':
+        return {
+          width: 20,
+          height: 15,
+          tooltip: '',
+          link: ''
+        };
+      case 'choice':
+        return {
+          question: '',
+          options: [
+            { text: '', jumpTo: 0 },
+            { text: '', jumpTo: 0 }
+          ]
+        };
+      case 'note':
+        return {
+          title: '',
+          content: '',
+          style: 'info' // info, warning, success
+        };
+      case 'pause':
+        return {
+          message: '',
+          minPauseTime: 3
+        };
+      default:
+        return {};
+    }
+  };
+
+  const updateInteraction = (index: number, field: string, value: any) => {
+    const newInteractions = [...interactions];
+    if (field.includes('.')) {
+      const [parent, child] = field.split('.');
+      newInteractions[index] = {
+        ...newInteractions[index],
+        [parent]: {
+          ...newInteractions[index][parent],
+          [child]: value
+        }
+      };
+    } else {
+      newInteractions[index] = { ...newInteractions[index], [field]: value };
+    }
+    
+    // Re-sort by timestamp
+    newInteractions.sort((a, b) => a.timestamp - b.timestamp);
+    setInteractions(newInteractions);
+    onUpdate('interactions', newInteractions);
+  };
+
+  const removeInteraction = (index: number) => {
+    const newInteractions = interactions.filter((_: any, i: number) => i !== index);
+    setInteractions(newInteractions);
+    onUpdate('interactions', newInteractions);
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Instructions */}
+      {showInstructions && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start justify-between">
+            <div className="flex">
+              <Play className="w-5 h-5 text-blue-600 mr-2 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-blue-800 mb-1">How Interactive Videos Work</h4>
+                <ul className="text-sm text-blue-700 space-y-1">
+                  <li>• Upload a video file to serve as the base content</li>
+                  <li>• Add interactive elements at specific timestamps</li>
+                  <li>• Students can answer questions, click hotspots, and make choices</li>
+                  <li>• Video can pause for mandatory interactions or branch to different sections</li>
+                </ul>
+              </div>
+            </div>
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowInstructions(false);
+              }}
+              size="sm"
+              variant="outline"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Video Upload */}
+      <div>
+        <h4 className="font-medium text-school-primary-blue mb-3">Upload Video</h4>
+        
+        {!videoUrl ? (
+          <div>
+            {!isUploading ? (
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
+                <Play className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <div className="mb-4">
+                  <p className="text-gray-600 mb-2">Choose a video file for the interactive experience</p>
+                  <p className="text-sm text-gray-500">Supports MP4, WebM, OGV (max 500MB)</p>
+                </div>
+                
+                <Button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    fileInputRef.current?.click();
+                  }}
+                  className="bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Choose Video File
+                </Button>
+                
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="video/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setVideoFile(file);
+                      handleVideoUpload(file);
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="hidden"
+                />
+              </div>
+            ) : (
+              <div className="border border-gray-300 rounded-lg p-8 text-center">
+                <div className="w-12 h-12 bg-school-primary-blue rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Upload className="w-6 h-6 text-white animate-pulse" />
+                </div>
+                <p className="text-school-primary-blue font-medium mb-2">Uploading video...</p>
+                <p className="text-sm text-gray-600 mb-4">{uploadProgress}% complete</p>
+                <div className="w-full bg-gray-200 rounded-full h-2 max-w-xs mx-auto">
+                  <div 
+                    className="bg-school-primary-blue h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Video Preview */}
+            <div className="relative bg-black rounded-lg overflow-hidden">
+              <video
+                className="w-full h-auto max-h-80"
+                controls
+                onTimeUpdate={(e) => {
+                  const video = e.target as HTMLVideoElement;
+                  setPreviewTime(Math.floor(video.currentTime));
+                }}
+              >
+                <source src={videoUrl} type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+              
+              {/* Interaction Markers on Timeline */}
+              {interactions.length > 0 && (
+                <div className="absolute bottom-12 left-0 right-0 h-1 mx-4">
+                  {interactions.map((interaction: any, index: number) => (
+                    <div
+                      key={interaction.id}
+                      className="absolute w-2 h-2 bg-yellow-400 rounded-full transform -translate-x-1/2"
+                      style={{ 
+                        left: `${(interaction.timestamp / (videoDuration || 1)) * 100}%`,
+                        bottom: '0px'
+                      }}
+                      title={`${interaction.type} at ${formatTime(interaction.timestamp)}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Video Info */}
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="text-sm text-gray-600">
+                Duration: {formatTime(videoDuration)} | Current: {formatTime(previewTime)}
+              </div>
+              <Button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onUpdate('videoUrl', '');
+                  onUpdate('videoDuration', 0);
+                  setInteractions([]);
+                  onUpdate('interactions', []);
+                }}
+                size="sm"
+                variant="outline"
+                className="text-red-600"
+              >
+                <X className="w-4 h-4 mr-1" />
+                Remove Video
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Interactions Management */}
+      {videoUrl && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-medium text-school-primary-blue">Interactive Elements</h4>
+            <div className="text-sm text-gray-600">
+              Add at: {formatTime(previewTime)}
+            </div>
+          </div>
+
+          {/* Add Interaction Buttons */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 mb-6">
+            {interactionTypes.map((type) => (
+              <Button
+                key={type.value}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  addInteraction(type.value);
+                }}
+                size="sm"
+                variant="outline"
+                className="text-xs"
+              >
+                <Plus className="w-3 h-3 mr-1" />
+                {type.label}
+              </Button>
+            ))}
+          </div>
+
+          {/* Interactions List */}
+          {interactions.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Target className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+              <p className="mb-3">No interactive elements yet</p>
+              <p className="text-sm text-gray-600">Seek to a timestamp in the video above, then click an interaction type to add</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {interactions.map((interaction: any, index: number) => (
+                <InteractionEditor
+                  key={interaction.id}
+                  interaction={interaction}
+                  index={index}
+                  videoDuration={videoDuration}
+                  onUpdate={updateInteraction}
+                  onRemove={removeInteraction}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Individual Interaction Editor Component
+function InteractionEditor({ 
+  interaction, 
+  index, 
+  videoDuration, 
+  onUpdate, 
+  onRemove 
+}: {
+  interaction: any;
+  index: number;
+  videoDuration: number;
+  onUpdate: (index: number, field: string, value: any) => void;
+  onRemove: (index: number) => void;
+}) {
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getInteractionIcon = (type: string) => {
+    switch (type) {
+      case 'quiz': return <HelpCircle className="w-4 h-4" />;
+      case 'hotspot': return <Target className="w-4 h-4" />;
+      case 'choice': return <GitBranch className="w-4 h-4" />;
+      case 'note': return <FileText className="w-4 h-4" />;
+      case 'pause': return <Pause className="w-4 h-4" />;
+      default: return <Zap className="w-4 h-4" />;
+    }
+  };
+
+  const getInteractionColor = (type: string) => {
+    switch (type) {
+      case 'quiz': return 'border-blue-300 bg-blue-50';
+      case 'hotspot': return 'border-green-300 bg-green-50';
+      case 'choice': return 'border-purple-300 bg-purple-50';
+      case 'note': return 'border-yellow-300 bg-yellow-50';
+      case 'pause': return 'border-red-300 bg-red-50';
+      default: return 'border-gray-300 bg-gray-50';
+    }
+  };
+
+  return (
+    <div className={`border rounded-lg p-4 ${getInteractionColor(interaction.type)}`}>
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center">
+          {getInteractionIcon(interaction.type)}
+          <div className="ml-2">
+            <div className="font-medium text-gray-900 capitalize">
+              {interaction.type} Interaction
+            </div>
+            <div className="text-sm text-gray-600">
+              At {formatTime(interaction.timestamp)}
+            </div>
+          </div>
+        </div>
+        
+        <Button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onRemove(index);
+          }}
+          size="sm"
+          variant="outline"
+          className="text-red-600"
+        >
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+
+      {/* Basic Settings */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Timestamp (seconds)
+          </label>
+          <input
+            type="number"
+            min="0"
+            max={videoDuration}
+            value={interaction.timestamp}
+            onChange={(e) => {
+              e.stopPropagation();
+              onUpdate(index, 'timestamp', parseInt(e.target.value) || 0);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Display Duration (seconds)
+          </label>
+          <input
+            type="number"
+            min="1"
+            max="30"
+            value={interaction.duration}
+            onChange={(e) => {
+              e.stopPropagation();
+              onUpdate(index, 'duration', parseInt(e.target.value) || 5);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          />
+        </div>
+
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            id={`required-${index}`}
+            checked={interaction.required}
+            onChange={(e) => {
+              e.stopPropagation();
+              onUpdate(index, 'required', e.target.checked);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="mr-2"
+          />
+          <label htmlFor={`required-${index}`} className="text-sm text-gray-700">
+            Required (pauses video)
+          </label>
+        </div>
+      </div>
+
+      {/* Type-Specific Content */}
+      <InteractionTypeEditor
+        interaction={interaction}
+        index={index}
+        onUpdate={onUpdate}
+      />
+    </div>
+  );
+}
+
+// Type-specific interaction editors
+function InteractionTypeEditor({ interaction, index, onUpdate }: any) {
+  switch (interaction.type) {
+    case 'quiz':
+      return (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Question
+            </label>
+            <input
+              type="text"
+              value={interaction.data.question}
+              onChange={(e) => {
+                e.stopPropagation();
+                onUpdate(index, 'data.question', e.target.value);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              placeholder="Enter your question"
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3">
+            {interaction.data.options.map((option: string, optionIndex: number) => (
+              <div key={optionIndex}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Option {optionIndex + 1} {optionIndex === interaction.data.correctAnswer && '(Correct)'}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`correct-${index}`}
+                    checked={interaction.data.correctAnswer === optionIndex}
+                    onChange={() => onUpdate(index, 'data.correctAnswer', optionIndex)}
+                    className="mr-1"
+                  />
+                  <input
+                    type="text"
+                    value={option}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      const newOptions = [...interaction.data.options];
+                      newOptions[optionIndex] = e.target.value;
+                      onUpdate(index, 'data.options', newOptions);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                    placeholder={`Option ${optionIndex + 1}`}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+
+    case 'note':
+      return (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Note Title
+            </label>
+            <input
+              type="text"
+              value={interaction.data.title}
+              onChange={(e) => {
+                e.stopPropagation();
+                onUpdate(index, 'data.title', e.target.value);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              placeholder="Note title"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Content
+            </label>
+            <textarea
+              value={interaction.data.content}
+              onChange={(e) => {
+                e.stopPropagation();
+                onUpdate(index, 'data.content', e.target.value);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md h-20"
+              placeholder="Note content"
+            />
+          </div>
+        </div>
+      );
+
+    default:
+      return (
+        <div className="text-center py-4 text-gray-500 text-sm">
+          Additional settings for {interaction.type} interactions coming soon
+        </div>
+      );
+  }
+}
 
 
 // Placeholder editors for other types

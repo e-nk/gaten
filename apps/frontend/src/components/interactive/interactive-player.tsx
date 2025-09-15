@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { InteractiveVideoPlayer } from "./interactive-video-player";
 import { 
   Play, 
   RotateCcw, 
@@ -398,6 +399,18 @@ function InteractiveContentRenderer({
       return <MatchingRenderer content={content} responses={responses} onUpdate={onResponseUpdate} />;
     case 'TIMELINE':
       return <TimelineRenderer content={content} responses={responses} onUpdate={onResponseUpdate} />;
+    case 'INTERACTIVE_VIDEO':
+      return (
+        <InteractiveVideoPlayer
+          interactiveContent={content}
+          responses={responses}
+          onUpdate={onResponseUpdate}
+          onComplete={() => {
+            // Mark as completed when all required interactions are done
+            onResponseUpdate({ ...responses, completed: true });
+          }}
+        />
+      );
     default:
       return <DefaultRenderer type={type} content={content} responses={responses} onUpdate={onResponseUpdate} />;
   }
