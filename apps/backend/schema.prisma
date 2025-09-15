@@ -271,6 +271,16 @@ model Quiz {
   title       String
   description String?
   
+  // Quiz Settings
+  timeLimit      Int?     // minutes, null = no limit
+  maxAttempts    Int      @default(1)
+  passingScore   Float    @default(70.0) // percentage
+  shuffleQuestions Boolean @default(false)
+  showResults    Boolean @default(true)
+  showCorrectAnswers Boolean @default(true)
+  availableFrom  DateTime?
+  availableUntil DateTime?
+  
   lessonId String
   lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   
@@ -285,15 +295,23 @@ model Quiz {
 
 model QuizQuestion {
   id          String       @id @default(cuid())
-  question    String
-  type        QuestionType @default(MULTIPLE_CHOICE)
-  options     Json? // Array of options for multiple choice
-  correctAnswer String
-  explanation String?
+  type        QuestionType
+  question    String       // The actual question text
+  explanation String?      // Explanation shown after answering
+  points      Int          @default(1)
   order       Int
+  
+  // Question content (JSON structure varies by type)
+  content     Json         // Flexible content for different question types
+  
+  // Correct answer(s) - format varies by question type
+  correctAnswer Json       // Can be string, array, object depending on type
   
   quizId String
   quiz   Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   
   @@map("quiz_questions")
 }
@@ -303,12 +321,18 @@ model QuizAttempt {
   userId    String
   quizId    String
   
-  answers   Json // User's answers
-  score     Float // 0-100
-  passed    Boolean @default(false)
+  // Attempt data
+  answers       Json         // User's answers for all questions
+  score         Float        // Final score percentage
+  pointsEarned  Int          @default(0)
+  totalPoints   Int          @default(0)
+  passed        Boolean      @default(false)
+  timeSpent     Int?         // seconds
   
-  startedAt   DateTime @default(now())
-  completedAt DateTime?
+  // Timing
+  startedAt     DateTime     @default(now())
+  submittedAt   DateTime?
+  completedAt   DateTime?
   
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
@@ -465,10 +489,15 @@ enum LessonType {
 }
 
 enum QuestionType {
-  MULTIPLE_CHOICE
+  MULTIPLE_CHOICE      // Single correct answer
+  MULTIPLE_SELECT      // Multiple correct answers
   TRUE_FALSE
-  FILL_BLANK
-  SHORT_ANSWER
+  FILL_BLANK          // Fill in the blank
+  SHORT_ANSWER        // Text input
+  ESSAY               // Long text
+  MATCHING            // Match pairs
+  ORDERING            // Arrange in order
+  IMAGE_HOTSPOT       // Click on image areas
 }
 
 enum AchievementType {
