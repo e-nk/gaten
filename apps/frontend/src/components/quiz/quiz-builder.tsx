@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, GripVertical, Settings, Eye } from "lucide-react";
+import { QuestionEditor } from './question-editors';
 
 interface QuizQuestion {
   id: string;
@@ -90,7 +91,12 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
     setQuestions(questions.filter((_, i) => i !== index));
   };
 
-  const handleSave = () => {
+  const handleSave = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
     const quizData = {
       ...quizSettings,
       questions: questions.map((q, index) => ({ ...q, order: index }))
@@ -105,14 +111,23 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
         <h2 className="text-2xl font-bold text-school-primary-blue">Quiz Builder</h2>
         <div className="flex items-center gap-2">
           <Button
-            onClick={() => setShowSettings(!showSettings)}
+            type="button" // Prevent form submission
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowSettings(!showSettings);
+            }}
             variant="outline"
             size="sm"
           >
             <Settings className="w-4 h-4 mr-2" />
             Settings
           </Button>
-          <Button onClick={handleSave} className="bg-school-primary-blue text-white">
+          <Button 
+            type="button" // Prevent form submission
+            onClick={handleSave} 
+            className="bg-school-primary-blue text-white"
+          >
             Save Quiz
           </Button>
         </div>
@@ -129,6 +144,7 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
               type="text"
               value={quizSettings.title}
               onChange={(e) => setQuizSettings(prev => ({ ...prev, title: e.target.value }))}
+              onClick={(e) => e.stopPropagation()} // Prevent event bubbling
               className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
               placeholder="Enter quiz title"
             />
@@ -141,6 +157,7 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
             <textarea
               value={quizSettings.description}
               onChange={(e) => setQuizSettings(prev => ({ ...prev, description: e.target.value }))}
+              onClick={(e) => e.stopPropagation()} // Prevent event bubbling
               className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue h-20"
               placeholder="Describe this quiz"
             />
@@ -165,6 +182,7 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
                   ...prev, 
                   timeLimit: e.target.value ? parseInt(e.target.value) : null 
                 }))}
+                onClick={(e) => e.stopPropagation()}
                 className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
                 placeholder="No limit"
               />
@@ -182,6 +200,7 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
                   ...prev, 
                   maxAttempts: parseInt(e.target.value) || 1 
                 }))}
+                onClick={(e) => e.stopPropagation()}
                 className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
               />
             </div>
@@ -199,6 +218,7 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
                   ...prev, 
                   passingScore: parseFloat(e.target.value) || 70 
                 }))}
+                onClick={(e) => e.stopPropagation()}
                 className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
               />
             </div>
@@ -213,6 +233,7 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
                     ...prev, 
                     shuffleQuestions: e.target.checked 
                   }))}
+                  onClick={(e) => e.stopPropagation()}
                   className="mr-2"
                 />
                 <label htmlFor="shuffleQuestions" className="text-sm text-school-primary-blue">
@@ -229,6 +250,7 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
                     ...prev, 
                     showResults: e.target.checked 
                   }))}
+                  onClick={(e) => e.stopPropagation()}
                   className="mr-2"
                 />
                 <label htmlFor="showResults" className="text-sm text-school-primary-blue">
@@ -245,6 +267,7 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
                     ...prev, 
                     showCorrectAnswers: e.target.checked 
                   }))}
+                  onClick={(e) => e.stopPropagation()}
                   className="mr-2"
                 />
                 <label htmlFor="showCorrectAnswers" className="text-sm text-school-primary-blue">
@@ -262,7 +285,12 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
         
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <Button
-            onClick={() => addQuestion('MULTIPLE_CHOICE')}
+            type="button" // Prevent form submission
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              addQuestion('MULTIPLE_CHOICE');
+            }}
             variant="outline"
             className="flex flex-col h-20 text-xs"
           >
@@ -271,7 +299,12 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
           </Button>
           
           <Button
-            onClick={() => addQuestion('MULTIPLE_SELECT')}
+            type="button" // Prevent form submission
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              addQuestion('MULTIPLE_SELECT');
+            }}
             variant="outline"
             className="flex flex-col h-20 text-xs"
           >
@@ -280,7 +313,12 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
           </Button>
           
           <Button
-            onClick={() => addQuestion('TRUE_FALSE')}
+            type="button" // Prevent form submission
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              addQuestion('TRUE_FALSE');
+            }}
             variant="outline"
             className="flex flex-col h-20 text-xs"
           >
@@ -289,7 +327,12 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
           </Button>
           
           <Button
-            onClick={() => addQuestion('FILL_BLANK')}
+            type="button" // Prevent form submission
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              addQuestion('FILL_BLANK');
+            }}
             variant="outline"
             className="flex flex-col h-20 text-xs"
           >
@@ -298,7 +341,12 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
           </Button>
           
           <Button
-            onClick={() => addQuestion('SHORT_ANSWER')}
+            type="button" // Prevent form submission
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              addQuestion('SHORT_ANSWER');
+            }}
             variant="outline"
             className="flex flex-col h-20 text-xs"
           >
@@ -329,54 +377,6 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
             </div>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-// Question Editor Component (we'll create this next)
-function QuestionEditor({ question, index, onUpdate, onRemove }: {
-  question: QuizQuestion;
-  index: number;
-  onUpdate: (updates: Partial<QuizQuestion>) => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div className="bg-white border border-school-primary-paledogwood rounded-lg p-6">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center">
-          <GripVertical className="w-4 h-4 text-gray-400 mr-2" />
-          <h4 className="font-medium text-school-primary-blue">
-            Question {index + 1} - {question.type.replace('_', ' ')}
-          </h4>
-        </div>
-        
-        <Button
-          onClick={onRemove}
-          variant="outline"
-          size="sm"
-          className="text-red-600 hover:text-red-700"
-        >
-          <Trash2 className="w-4 h-4" />
-        </Button>
-      </div>
-
-      {/* Question Text */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-school-primary-blue mb-1">
-          Question *
-        </label>
-        <textarea
-          value={question.question}
-          onChange={(e) => onUpdate({ question: e.target.value })}
-          className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue h-20"
-          placeholder="Enter your question here"
-        />
-      </div>
-
-      {/* Question-specific content will be rendered here based on type */}
-      <div className="text-sm text-gray-500 p-4 bg-gray-50 rounded">
-        Question editor for {question.type} will be implemented next...
       </div>
     </div>
   );

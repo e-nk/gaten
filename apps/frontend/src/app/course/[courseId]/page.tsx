@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/navigation/navbar";
+import { QuizPlayer } from "@/components/quiz/quiz-player";
 import { trpc } from "@/trpc/provider";
 import ReactPlayer from 'react-player';
 import { 
@@ -60,6 +61,27 @@ export default function CoursePlayerPage() {
       enabled: !!session?.user?.id && !!courseData?.isEnrolled
     }
   );
+	const { data: quizData } = trpc.getQuiz.useQuery(
+		{
+			quizId: lessonData?.lesson.quizzes?.[0]?.id || '',
+			userId: session?.user?.id
+		},
+		{
+			enabled: !!lessonData?.lesson.quizzes?.[0]?.id && !!session?.user?.id
+		}
+	);
+
+	const { data: quizAttempts } = trpc.getUserQuizAttempts.useQuery(
+		{
+			quizId: lessonData?.lesson.quizzes?.[0]?.id || '',
+			userId: session?.user?.id || ''
+		},
+		{
+			enabled: !!lessonData?.lesson.quizzes?.[0]?.id && !!session?.user?.id
+		}
+	);
+
+	
 
   // tRPC mutations
   const markCompleteMutation = trpc.markLessonComplete.useMutation({
@@ -67,6 +89,19 @@ export default function CoursePlayerPage() {
       window.location.reload();
     }
   });
+
+	const submitQuizMutation = trpc.submitQuizAttempt.useMutation({
+		onSuccess: (result) => {
+			alert(`Quiz submitted! Score: ${result.score.toFixed(1)}% (${result.passed ? 'Passed' : 'Failed'})`);
+			if (result.passed && !isLessonCompleted(selectedLessonId!)) {
+				handleMarkComplete();
+			}
+			window.location.reload(); // Refresh to show updated attempts
+		},
+		onError: (error) => {
+			alert('Failed to submit quiz: ' + error.message);
+		}
+	});
 
   // Get all lessons in order
   const allLessons = courseData?.course.modules.flatMap(module => 
@@ -519,9 +554,40 @@ export default function CoursePlayerPage() {
 									</div>
 								)}
 
+								{lessonData.lesson.type === 'QUIZ' && (
+									<div className="bg-white border border-gray-200 rounded-lg p-6">
+										{quizData ? (
+											<QuizPlayer
+												quiz={quizData}
+												existingAttempts={quizAttempts || []}
+												isSubmitting={submitQuizMutation.isPending}
+												onSubmit={(answers, timeSpent) => {
+													submitQuizMutation.mutate({
+														quizId: quizData.id,
+														userId: session?.user?.id || '',
+														answers,
+														timeSpent
+													});
+												}}
+											/>
+										) : (
+											<div className="text-center py-12">
+												<div className="w-16 h-16 bg-school-primary-nyanza rounded-full flex items-center justify-center mx-auto mb-4">
+													<HelpCircle className="w-8 h-8 text-school-primary-blue" />
+												</div>
+												<h3 className="text-lg font-medium text-school-primary-blue mb-2">
+													No quiz available
+												</h3>
+												<p className="text-gray-600">
+													This quiz lesson hasn't been set up yet.
+												</p>
+											</div>
+										)}
+									</div>
+								)}
+
                 {/* Other Content Types */}
-                {(lessonData.lesson.type === 'QUIZ' || 
-                  lessonData.lesson.type === 'ASSIGNMENT' || 
+                {(lessonData.lesson.type === 'ASSIGNMENT' || 
                   lessonData.lesson.type === 'INTERACTIVE') && (
                   <div className="bg-white border border-gray-200 rounded-lg p-6 text-center">
                     <div className="text-gray-500">

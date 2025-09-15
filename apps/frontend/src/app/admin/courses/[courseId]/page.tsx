@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/navigation/navbar";
 import { AdminGuard } from "@/components/auth/admin-guard";
 import { VideoUpload } from "@/components/upload/video-upload";
+import { QuizBuilder } from "@/components/quiz/quiz-builder";
 import ReactPlayer from 'react-player';
 import { trpc } from "@/trpc/provider";
 import { useSession } from "next-auth/react";
@@ -42,6 +43,7 @@ function CourseContentPage() {
 		estimatedDuration: 0,
 		videoUrl: '',
 		videoDuration: 0,
+		quizData: null as any,
 	});
 
   // tRPC queries
@@ -74,10 +76,24 @@ function CourseContentPage() {
   });
 
   const createLessonMutation = trpc.createLesson.useMutation({
-		onSuccess: () => {
+		onSuccess: async (createdLesson) => {
+			// If it's a quiz lesson and has quiz data, create the quiz
+			if (lessonFormData.type === 'QUIZ' && lessonFormData.quizData) {
+				try {
+					await createQuizMutation.mutateAsync({
+						...lessonFormData.quizData,
+						lessonId: createdLesson.id,
+						creatorId: session?.user?.id || '',
+						userRole: session?.user?.role || '',
+					});
+				} catch (error) {
+					console.error('Failed to create quiz:', error);
+					alert('Lesson created but quiz creation failed. Please try again.');
+				}
+			}
+			
 			refetchModules();
 			setShowLessonForm(null);
-			// Reset form data properly
 			setLessonFormData({ 
 				title: '', 
 				description: '', 
@@ -85,13 +101,17 @@ function CourseContentPage() {
 				content: '', 
 				estimatedDuration: 0, 
 				videoUrl: '', 
-				videoDuration: 0 
+				videoDuration: 0,
+				quizData: null
 			});
 		},
 		onError: (error) => {
 			alert(error.message);
 		}
 	});
+
+	const createQuizMutation = trpc.createQuiz.useMutation();
+
 
   const handleCreateModule = (e: React.FormEvent) => {
     e.preventDefault();
@@ -385,10 +405,26 @@ const handleCreateLesson = (e: React.FormEvent) => {
 													...prev,
 													videoUrl: videoData.url,
 													videoDuration: videoData.duration,
-													estimatedDuration: Math.ceil(videoData.duration / 60) // Convert to minutes
+													estimatedDuration: Math.ceil(videoData.duration / 60)
 												}));
 											}}
 										/>
+									</div>
+								)}
+
+								{lessonFormData.type === 'QUIZ' && (
+									<div>
+										<label className="block text-sm font-medium text-school-primary-blue mb-2">
+											Quiz Content
+										</label>
+										<div className="border border-school-primary-paledogwood rounded-lg p-4 max-h-96 overflow-y-auto">
+											<QuizBuilder
+												onSave={(quizData) => {
+													setLessonFormData(prev => ({ ...prev, quizData }));
+												}}
+												initialData={lessonFormData.quizData}
+											/>
+										</div>
 									</div>
 								)}
 
@@ -409,16 +445,15 @@ const handleCreateLesson = (e: React.FormEvent) => {
 								<div className="flex space-x-3 pt-4">
 									<Button
 										type="submit"
-										disabled={createLessonMutation.isPending}
+										disabled={createLessonMutation.isPending || createQuizMutation.isPending}
 										className="flex-1 bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
 									>
-										{createLessonMutation.isPending ? 'Creating...' : 'Create Lesson'}
+										{(createLessonMutation.isPending || createQuizMutation.isPending) ? 'Creating...' : 'Create Lesson'}
 									</Button>
 									<Button
 										type="button"
 										variant="outline"
-										onClick={(e) => {
-											e.preventDefault(); 
+										onClick={() => {
 											setShowLessonForm(null);
 											setLessonFormData({ 
 												title: '', 
@@ -427,7 +462,8 @@ const handleCreateLesson = (e: React.FormEvent) => {
 												content: '', 
 												estimatedDuration: 0, 
 												videoUrl: '', 
-												videoDuration: 0 
+												videoDuration: 0,
+												quizData: null
 											});
 										}}
 										className="flex-1"

@@ -11,6 +11,71 @@ const getDb = () => {
   return db;
 };
 
+// Quiz scoring helper function
+function calculateQuizScore(questions: any[], userAnswers: any) {
+  let pointsEarned = 0;
+  let totalPoints = 0;
+
+  questions.forEach((question, index) => {
+    totalPoints += question.points;
+    const userAnswer = userAnswers[question.id] || userAnswers[index];
+    
+    if (isAnswerCorrect(question, userAnswer)) {
+      pointsEarned += question.points;
+    }
+  });
+
+  const score = totalPoints > 0 ? (pointsEarned / totalPoints) * 100 : 0;
+  
+  return {
+    score: Math.round(score * 100) / 100, // Round to 2 decimal places
+    pointsEarned,
+    totalPoints
+  };
+}
+
+function isAnswerCorrect(question: any, userAnswer: any): boolean {
+  if (!userAnswer && userAnswer !== 0) return false;
+
+  switch (question.type) {
+    case 'MULTIPLE_CHOICE':
+    case 'TRUE_FALSE':
+      return userAnswer === question.correctAnswer;
+      
+    case 'MULTIPLE_SELECT':
+      const correctAnswers = question.correctAnswer || [];
+      const userAnswers = Array.isArray(userAnswer) ? userAnswer : [];
+      return correctAnswers.length === userAnswers.length &&
+             correctAnswers.every((answer: number) => userAnswers.includes(answer));
+             
+    case 'FILL_BLANK':
+      const correctBlanks = question.correctAnswer || [];
+      const userBlanks = Array.isArray(userAnswer) ? userAnswer : [];
+      return correctBlanks.every((correct: string, index: number) => {
+        const userResponse = userBlanks[index]?.toLowerCase().trim();
+        const correctResponse = correct.toLowerCase().trim();
+        return userResponse === correctResponse;
+      });
+      
+    case 'SHORT_ANSWER':
+      const correctAnswer = question.correctAnswer || '';
+      const userResponse = userAnswer || '';
+      const caseSensitive = question.content?.caseSensitive || false;
+      const exactMatch = question.content?.exactMatch || false;
+      
+      if (!exactMatch) return true; // Manual grading required
+      
+      if (caseSensitive) {
+        return userResponse.trim() === correctAnswer.trim();
+      } else {
+        return userResponse.toLowerCase().trim() === correctAnswer.toLowerCase().trim();
+      }
+      
+    default:
+      return false;
+  }
+}
+
 export const appRouter = router({
   // Public procedures
   healthCheck: publicProcedure.query(async () => {
@@ -677,6 +742,13 @@ getLessonContent: publicProcedure
           include: {
             course: true
           }
+        },
+        quizzes: {
+          include: {
+            questions: {
+              orderBy: { order: 'asc' }
+            }
+          }
         }
       }
     });
@@ -809,6 +881,237 @@ markLessonComplete: publicProcedure
     return progress;
   }),
 
+	// Quiz management procedures
+createQuiz: publicProcedure
+  .input(z.object({
+    title: z.string().min(1, 'Title is required'),
+    description: z.string().optional(),
+    lessonId: z.string(),
+    timeLimit: z.number().int().optional(),
+    maxAttempts: z.number().int().min(1).default(1),
+    passingScore: z.number().min(0).max(100).default(70),
+    shuffleQuestions: z.boolean().default(false),
+    showResults: z.boolean().default(true),
+    showCorrectAnswers: z.boolean().default(true),
+    questions: z.array(z.object({
+      type: z.enum(['MULTIPLE_CHOICE', 'MULTIPLE_SELECT', 'TRUE_FALSE', 'FILL_BLANK', 'SHORT_ANSWER']),
+      question: z.string().min(1),
+      content: z.any(),
+      correctAnswer: z.any(),
+      explanation: z.string().optional(),
+      points: z.number().int().min(1).default(1),
+      order: z.number().int().min(0),
+    })),
+    creatorId: z.string(),
+    userRole: z.string(),
+  }))
+  .mutation(async ({ input }) => {
+    if (input.userRole !== 'ADMIN') {
+      throw new Error('Admin access required');
+    }
+
+    const database = getDb();
+    
+    // Verify user owns the lesson
+    const lesson = await database.lesson.findFirst({
+      where: { id: input.lessonId },
+      include: {
+        module: {
+          include: {
+            course: { select: { creatorId: true } }
+          }
+        }
+      }
+    });
+
+    if (!lesson || lesson.module.course.creatorId !== input.creatorId) {
+      throw new Error('Lesson not found or access denied');
+    }
+
+    const { questions, creatorId, userRole, ...quizData } = input;
+
+    const quiz = await database.quiz.create({
+      data: {
+        ...quizData,
+        questions: {
+          create: questions.map(q => ({
+            type: q.type,
+            question: q.question,
+            content: q.content,
+            correctAnswer: q.correctAnswer,
+            explanation: q.explanation,
+            points: q.points,
+            order: q.order,
+          }))
+        }
+      },
+      include: {
+        questions: {
+          orderBy: { order: 'asc' }
+        }
+      }
+    });
+
+    return quiz;
+  }),
+
+getQuiz: publicProcedure
+  .input(z.object({
+    quizId: z.string(),
+    userId: z.string().optional(),
+  }))
+  .query(async ({ input }) => {
+    const database = getDb();
+    
+    const quiz = await database.quiz.findUnique({
+      where: { id: input.quizId },
+      include: {
+        questions: {
+          orderBy: { order: 'asc' }
+        },
+        lesson: {
+          include: {
+            module: {
+              include: {
+                course: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!quiz) {
+      throw new Error('Quiz not found');
+    }
+
+    // Check if user is enrolled (if userId provided)
+    if (input.userId) {
+      const enrollment = await database.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId: input.userId,
+            courseId: quiz.lesson.module.course.id
+          }
+        }
+      });
+
+      if (!enrollment) {
+        throw new Error('Not enrolled in this course');
+      }
+    }
+
+    return quiz;
+  }),
+
+submitQuizAttempt: publicProcedure
+  .input(z.object({
+    quizId: z.string(),
+    userId: z.string(),
+    answers: z.any(), // User's answers
+    timeSpent: z.number().int().optional(),
+  }))
+  .mutation(async ({ input }) => {
+    const database = getDb();
+    
+    // Get quiz with questions
+    const quiz = await database.quiz.findUnique({
+      where: { id: input.quizId },
+      include: {
+        questions: {
+          orderBy: { order: 'asc' }
+        },
+        lesson: {
+          include: {
+            module: {
+              include: {
+                course: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!quiz) {
+      throw new Error('Quiz not found');
+    }
+
+    // Check enrollment
+    const enrollment = await database.enrollment.findUnique({
+      where: {
+        userId_courseId: {
+          userId: input.userId,
+          courseId: quiz.lesson.module.course.id
+        }
+      }
+    });
+
+    if (!enrollment) {
+      throw new Error('Not enrolled in this course');
+    }
+
+    // Check if user has attempts remaining
+    const existingAttempts = await database.quizAttempt.count({
+      where: {
+        userId: input.userId,
+        quizId: input.quizId
+      }
+    });
+
+    if (existingAttempts >= quiz.maxAttempts) {
+      throw new Error('Maximum attempts exceeded');
+    }
+
+    // Calculate score
+    const { score, pointsEarned, totalPoints } = calculateQuizScore(quiz.questions, input.answers);
+    const passed = score >= quiz.passingScore;
+
+    // Create attempt
+    const attempt = await database.quizAttempt.create({
+      data: {
+        userId: input.userId,
+        quizId: input.quizId,
+        answers: input.answers,
+        score,
+        pointsEarned,
+        totalPoints,
+        passed,
+        timeSpent: input.timeSpent,
+        completedAt: new Date(),
+        submittedAt: new Date(),
+      }
+    });
+
+    return {
+      attempt,
+      score,
+      passed,
+      totalPoints,
+      pointsEarned,
+    };
+  }),
+
+getUserQuizAttempts: publicProcedure
+  .input(z.object({
+    quizId: z.string(),
+    userId: z.string(),
+  }))
+  .query(async ({ input }) => {
+    const database = getDb();
+    
+    const attempts = await database.quizAttempt.findMany({
+      where: {
+        quizId: input.quizId,
+        userId: input.userId,
+      },
+      orderBy: { startedAt: 'desc' }
+    });
+
+    return attempts;
+  }),
+
+
 getUserCourseProgress: publicProcedure
   .input(z.object({
     courseId: z.string(),
@@ -834,9 +1137,9 @@ getUserCourseProgress: publicProcedure
     });
 
     return lessonProgress;
-  }),
-
-	
+  }),	
 });
 
+
+	
 export type AppRouter = typeof appRouter;
