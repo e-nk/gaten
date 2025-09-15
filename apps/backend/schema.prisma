@@ -50,6 +50,7 @@ model User {
   achievements     UserAchievement[]
   notifications    Notification[]
   assignments      AssignmentSubmission[]
+	interactiveAttempts InteractiveAttempt[]
   quizAttempts     QuizAttempt[]
   savedCourses     SavedCourse[]
   
@@ -193,6 +194,7 @@ model Lesson {
   progress    LessonProgress[]
   quizzes     Quiz[]
   assignments Assignment[]
+	interactiveContents InteractiveContent[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -397,6 +399,56 @@ model AssignmentSubmission {
   @@map("assignment_submissions")
 }
 
+model InteractiveContent {
+  id          String @id @default(cuid())
+  title       String
+  description String?
+  type        InteractiveType
+  
+  // Content configuration (JSON structure varies by type)
+  config      Json         // Flexible configuration object
+  content     Json         // The actual interactive content data
+  
+  // Settings
+  maxAttempts    Int      @default(1)
+  passingScore   Float?   // Optional passing score
+  showFeedback   Boolean  @default(true)
+  allowReplay    Boolean  @default(true)
+  timeLimit      Int?     // Optional time limit in minutes
+  
+  // Relationship
+  lessonId String
+  lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  
+  attempts InteractiveAttempt[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("interactive_contents")
+}
+
+model InteractiveAttempt {
+  id          String @id @default(cuid())
+  userId      String
+  contentId   String
+  
+  // Attempt data
+  responses   Json         // User's responses/interactions
+  score       Float?       // Score if applicable
+  completed   Boolean      @default(false)
+  timeSpent   Int?         // Time spent in seconds
+  
+  // Timing
+  startedAt   DateTime     @default(now())
+  completedAt DateTime?
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content InteractiveContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  
+  @@map("interactive_attempts")
+}
+
 // ================================
 // REVIEWS & RATINGS
 // ================================
@@ -535,4 +587,15 @@ enum SubmissionStatus {
   SUBMITTED
   GRADED
   RETURNED
+}
+
+enum InteractiveType {
+  DRAG_DROP        // Drag and drop matching
+  HOTSPOT          // Clickable image hotspots  
+  SEQUENCE         // Order/sequence activities
+  MATCHING         // Match items between columns
+  TIMELINE         // Interactive timeline
+  SIMULATION       // Custom simulations
+  WIDGET           // Custom interactive widgets
+  H5P              // H5P content integration
 }

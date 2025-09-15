@@ -8,6 +8,8 @@ import { Navbar } from "@/components/navigation/navbar";
 import { QuizPlayer } from "@/components/quiz/quiz-player";
 import { QuizAnswerReview } from "@/components/quiz/quiz-answer-review";
 import { AssignmentPlayer } from "@/components/assignment/assignment-player";
+import { InteractivePlayer } from "@/components/interactive/interactive-player";
+import { InteractiveResults } from "@/components/interactive/interactive-results";
 import { trpc } from "@/trpc/provider";
 import ReactPlayer from 'react-player';
 import { 
@@ -24,7 +26,8 @@ import {
   Menu,
   X,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+	Target
 } from "lucide-react";
 import { QuizResults } from "@/components/quiz/quiz-results";
 import { AssignmentSubmissionResult } from "@/components/assignment/assignment-submission-result";
@@ -38,6 +41,10 @@ export default function CoursePlayerPage() {
 	const [showQuizResults, setShowQuizResults] = useState(false);
 	const [showAssignmentResults, setShowAssignmentResults] = useState(false);
 	const [assignmentSubmissionResult, setAssignmentSubmissionResult] = useState<any>(null);
+	const [showInteractiveResults, setShowInteractiveResults] = useState(false);
+	const [interactiveSubmissionResult, setInteractiveSubmissionResult] = useState<any>(null);
+
+
 
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -112,12 +119,32 @@ export default function CoursePlayerPage() {
 	);
 
 	const { data: assignmentSubmission } = trpc.getUserAssignmentSubmission.useQuery(
+			{
+				assignmentId: lessonData?.lesson.assignments?.[0]?.id || '',
+				userId: session?.user?.id || ''
+			},
+			{
+				enabled: !!lessonData?.lesson.assignments?.[0]?.id && !!session?.user?.id
+			}
+		);
+
+		const { data: interactiveData } = trpc.getInteractiveContent.useQuery(
 		{
-			assignmentId: lessonData?.lesson.assignments?.[0]?.id || '',
+			contentId: lessonData?.lesson.interactiveContents?.[0]?.id || '',
+			userId: session?.user?.id
+		},
+		{
+			enabled: !!lessonData?.lesson.interactiveContents?.[0]?.id && !!session?.user?.id
+		}
+	);
+
+	const { data: interactiveAttempts } = trpc.getUserInteractiveAttempts.useQuery(
+		{
+			contentId: lessonData?.lesson.interactiveContents?.[0]?.id || '',
 			userId: session?.user?.id || ''
 		},
 		{
-			enabled: !!lessonData?.lesson.assignments?.[0]?.id && !!session?.user?.id
+			enabled: !!lessonData?.lesson.interactiveContents?.[0]?.id && !!session?.user?.id
 		}
 	);
 
@@ -129,6 +156,25 @@ export default function CoursePlayerPage() {
       window.location.reload();
     }
   });
+
+	const submitInteractiveMutation = trpc.submitInteractiveAttempt.useMutation({
+		onSuccess: (result) => {
+			// Show beautiful results instead of alert
+			setInteractiveSubmissionResult(result);
+			setShowInteractiveResults(true);
+			
+			// Mark lesson complete if passed or no passing score required
+			if ((result.passed || !interactiveData?.passingScore) && !isLessonCompleted(selectedLessonId!)) {
+				handleMarkComplete();
+			}
+			
+			// Refresh interactive data
+			window.location.reload();
+		},
+		onError: (error) => {
+			alert('Failed to submit interactive content: ' + error.message);
+		}
+	});
 
 	const submitQuizMutation = trpc.submitQuizAttempt.useMutation({
 		onSuccess: (result) => {
@@ -246,6 +292,7 @@ export default function CoursePlayerPage() {
       case 'TEXT': return <FileText className="w-4 h-4" />;
       case 'QUIZ': return <HelpCircle className="w-4 h-4" />;
       case 'ASSIGNMENT': return <PenTool className="w-4 h-4" />;
+			case 'INTERACTIVE': return <Target className="w-4 h-4" />;
       default: return <BookOpen className="w-4 h-4" />;
     }
   };
@@ -799,9 +846,56 @@ export default function CoursePlayerPage() {
 									</div>
 								)}
 
+								{lessonData.lesson.type === 'INTERACTIVE' && (
+									<div className="bg-white border border-gray-200 rounded-lg p-6">
+										{showInteractiveResults && interactiveSubmissionResult && interactiveData ? (
+											<InteractiveResults
+												interactiveContent={interactiveData}
+												result={interactiveSubmissionResult}
+												canRetry={(interactiveAttempts?.length || 0) < (interactiveData?.maxAttempts || 1)}
+												onClose={() => {
+													setShowInteractiveResults(false);
+													setInteractiveSubmissionResult(null);
+												}}
+												onRetry={() => {
+													setShowInteractiveResults(false);
+													setInteractiveSubmissionResult(null);
+												}}
+											/>
+										) : interactiveData ? (
+											<InteractivePlayer
+												interactiveContent={interactiveData}
+												attempts={interactiveAttempts || []}
+												isSubmitting={submitInteractiveMutation.isPending}
+												onSubmit={(responses, timeSpent) => {
+													submitInteractiveMutation.mutate({
+														contentId: interactiveData.id,
+														userId: session?.user?.id || '',
+														responses,
+														timeSpent,
+														completed: true
+													});
+												}}
+											/>
+										) : (
+											<div className="text-center py-12">
+												<div className="w-16 h-16 bg-school-primary-nyanza rounded-full flex items-center justify-center mx-auto mb-4">
+													<Target className="w-8 h-8 text-school-primary-blue" />
+												</div>
+												<h3 className="text-lg font-medium text-school-primary-blue mb-2">
+													No interactive content available
+												</h3>
+												<p className="text-gray-600">
+													This interactive lesson hasn't been set up yet.
+												</p>
+											</div>
+										)}
+									</div>
+								)}
+
 
                 {/* Other Content Types */}
-                {(lessonData.lesson.type === 'INTERACTIVE') && (
+                {/* {(lessonData.lesson.type === 'INTERACTIVE') && (
                   <div className="bg-white border border-gray-200 rounded-lg p-6 text-center">
                     <div className="text-gray-500">
                       {getLessonIcon(lessonData.lesson.type)}
@@ -810,7 +904,7 @@ export default function CoursePlayerPage() {
                       </p>
                     </div>
                   </div>
-                )}
+                )} */}
 
                 {/* Mark Complete Button */}
                 <div className="mt-8 flex justify-center">

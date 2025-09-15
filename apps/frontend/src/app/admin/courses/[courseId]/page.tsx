@@ -8,6 +8,7 @@ import { AdminGuard } from "@/components/auth/admin-guard";
 import { VideoUpload } from "@/components/upload/video-upload";
 import { QuizBuilder } from "@/components/quiz/quiz-builder";
 import { AssignmentBuilder } from "@/components/assignment/assignment-builder";
+import { InteractiveBuilder } from "@/components/interactive/interactive-builder";
 import ReactPlayer from 'react-player';
 import { trpc } from "@/trpc/provider";
 import { useSession } from "next-auth/react";
@@ -48,6 +49,7 @@ function CourseContentPage() {
 		videoDuration: 0,
 		quizData: null as any,
 		assignmentData: null as any,
+		interactiveData: null as any,
 	});
   // tRPC queries
   const { data: course } = trpc.getAdminCourses.useQuery(
@@ -112,6 +114,21 @@ function CourseContentPage() {
 					alert('Lesson created but assignment creation failed.');
 				}
 			}
+
+			// Handle interactive content creation
+    if (lessonFormData.type === 'INTERACTIVE' && lessonFormData.interactiveData) {
+      try {
+        await createInteractiveMutation.mutateAsync({
+          ...lessonFormData.interactiveData,
+          lessonId: createdLesson.id,
+          creatorId: session?.user?.id || '',
+          userRole: session?.user?.role || '',
+        });
+      } catch (error) {
+        console.error('Interactive content creation failed:', error);
+        alert('Lesson created but interactive content creation failed.');
+      }
+    }    
 			
 			refetchModules();
 			setShowLessonForm(null);
@@ -124,13 +141,16 @@ function CourseContentPage() {
 				videoUrl: '', 
 				videoDuration: 0,
 				quizData: null,
-				assignmentData: null
+				assignmentData: null,
+				interactiveData: null,
 			});
 		}
 	});
 
 	const createQuizMutation = trpc.createQuiz.useMutation();
 	const createAssignmentMutation = trpc.createAssignment.useMutation();
+	const createInteractiveMutation = trpc.createInteractiveContent.useMutation();
+
 
 
 
@@ -193,6 +213,18 @@ const handleCreateLesson = (e: React.FormEvent) => {
 			}
 		}
 
+		else if (lessonFormData.type === 'INTERACTIVE') {
+				if (!lessonFormData.interactiveData) {
+				alert('Please configure the interactive content before creating the lesson.');
+				return;
+			}
+			
+			if (!lessonFormData.interactiveData.title || !lessonFormData.interactiveData.type) {
+				alert('Please fill in all required interactive content fields (title and type).');
+				return;
+			}
+		}
+
 		else if (lessonFormData.type === 'QUIZ') {
 			if (!lessonFormData.quizData || !lessonFormData.quizData.questions || lessonFormData.quizData.questions.length === 0) {
       alert('Please add at least one question to the quiz before creating the lesson.');
@@ -214,6 +246,7 @@ const handleCreateLesson = (e: React.FormEvent) => {
 		console.log('Data being sent to backend:', lessonData);
 		console.log('Quiz Questions:', lessonFormData.quizData?.questions || 'No questions');
 		console.log('Assignment Data:', lessonFormData.assignmentData);
+		console.log('Interactive Data:', lessonFormData.interactiveData);
   	console.log('================================');
 		console.log('Video URL in form state:', lessonFormData.videoUrl);
 		console.log('Video URL being sent:', lessonData.videoUrl);
@@ -538,6 +571,56 @@ const handleCreateLesson = (e: React.FormEvent) => {
 									</div>
 								)}
 
+								{lessonFormData.type === 'INTERACTIVE' && (
+									<div>
+										<label className="block text-sm font-medium text-school-primary-blue mb-2">
+											Interactive Content
+										</label>
+										
+										{/* Interactive Status Indicator */}
+										<div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+											<div className="flex items-center justify-between">
+												<div>
+													<p className="text-sm font-medium text-purple-800">
+														Interactive Status: {lessonFormData.interactiveData ? 'Ready' : 'Not configured'}
+													</p>
+													{lessonFormData.interactiveData && (
+														<p className="text-xs text-purple-600">
+															Type: {lessonFormData.interactiveData.type?.replace('_', ' ')} | 
+															Max Attempts: {lessonFormData.interactiveData.maxAttempts}
+														</p>
+													)}
+												</div>
+												{lessonFormData.interactiveData && (
+													<div className="text-green-600">
+														<CheckCircle className="w-5 h-5" />
+													</div>
+												)}
+											</div>
+										</div>
+										
+										<div className="border border-school-primary-paledogwood rounded-lg p-4 max-h-96 overflow-y-auto">
+											<InteractiveBuilder
+												onSave={(interactiveData) => {
+													console.log('=== INTERACTIVE BUILDER ON SAVE ===');
+													console.log('Received interactive data:', interactiveData);
+													setLessonFormData(prev => {
+														const updated = { ...prev, interactiveData };
+														console.log('Updated lesson form data:', updated);
+														return updated;
+													});
+												}}
+												initialData={lessonFormData.interactiveData}
+											/>
+										</div>
+										
+										{/* Instructions */}
+										<div className="mt-2 text-xs text-gray-600">
+											<p>💡 <strong>Tip:</strong> Configure your interactive content above, then click "Save Interactive Content" before creating the lesson.</p>
+										</div>
+									</div>
+								)}
+
 								<div>
 									<label className="block text-sm font-medium text-school-primary-blue mb-1">
 										Estimated Duration (minutes)
@@ -574,7 +657,8 @@ const handleCreateLesson = (e: React.FormEvent) => {
 												videoUrl: '', 
 												videoDuration: 0,
 												quizData: null,
-												assignmentData: null
+												assignmentData: null,
+												interactiveData: null,
 											});
 										}}
 										className="flex-1"

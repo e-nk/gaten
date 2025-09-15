@@ -75,6 +75,128 @@ function isAnswerCorrect(question: any, userAnswer: any): boolean {
       return false;
   }
 }
+// Interactive content scoring helper function
+function calculateInteractiveScore(interactiveContent: any, userResponses: any): number {
+  const { type, content } = interactiveContent;
+  
+  switch (type) {
+    case 'DRAG_DROP':
+      return calculateDragDropScore(content, userResponses);
+    case 'HOTSPOT':
+      return calculateHotspotScore(content, userResponses);
+    case 'SEQUENCE':
+      return calculateSequenceScore(content, userResponses);
+    case 'MATCHING':
+      return calculateMatchingScore(content, userResponses);
+    case 'TIMELINE':
+      return calculateTimelineScore(content, userResponses);
+    default:
+      // For simulation and custom types, return based on completion
+      return userResponses.completed ? 100 : 0;
+  }
+}
+
+function calculateDragDropScore(content: any, responses: any): number {
+  const items = content.items || [];
+  const userPlacements = responses.placements || {};
+  
+  let correctCount = 0;
+  
+  items.forEach((item: any, index: number) => {
+    const userTarget = userPlacements[item.id];
+    const correctTarget = item.correctTarget;
+    
+    if (userTarget === correctTarget) {
+      correctCount++;
+    }
+  });
+  
+  return items.length > 0 ? Math.round((correctCount / items.length) * 100) : 0;
+}
+
+function calculateHotspotScore(content: any, responses: any): number {
+  const hotspots = content.hotspots || [];
+  const userClicks = responses.clicks || [];
+  
+  let correctCount = 0;
+  
+  hotspots.forEach((hotspot: any) => {
+    const wasClicked = userClicks.some((click: any) => 
+      isPointInHotspot(click, hotspot)
+    );
+    
+    if (wasClicked) {
+      correctCount++;
+    }
+  });
+  
+  return hotspots.length > 0 ? Math.round((correctCount / hotspots.length) * 100) : 0;
+}
+
+function calculateSequenceScore(content: any, responses: any): number {
+  const correctOrder = content.items || [];
+  const userOrder = responses.order || [];
+  
+  let correctCount = 0;
+  
+  correctOrder.forEach((item: any, index: number) => {
+    if (userOrder[index] === item.id) {
+      correctCount++;
+    }
+  });
+  
+  return correctOrder.length > 0 ? Math.round((correctCount / correctOrder.length) * 100) : 0;
+}
+
+function calculateMatchingScore(content: any, responses: any): number {
+  const leftItems = content.leftItems || [];
+  const userMatches = responses.matches || {};
+  
+  let correctCount = 0;
+  
+  leftItems.forEach((item: any) => {
+    const userMatch = userMatches[item.id];
+    const correctMatch = item.correctMatch;
+    
+    if (userMatch === correctMatch) {
+      correctCount++;
+    }
+  });
+  
+  return leftItems.length > 0 ? Math.round((correctCount / leftItems.length) * 100) : 0;
+}
+
+function calculateTimelineScore(content: any, responses: any): number {
+  const events = content.events || [];
+  const userPlacements = responses.placements || {};
+  
+  let correctCount = 0;
+  
+  events.forEach((event: any) => {
+    const userDate = userPlacements[event.id];
+    const correctDate = event.date;
+    
+    // Allow some margin of error for timeline placement
+    const margin = content.config?.dateMargin || 365; // days
+    const userTime = new Date(userDate).getTime();
+    const correctTime = new Date(correctDate).getTime();
+    const difference = Math.abs(userTime - correctTime);
+    const daysDifference = difference / (1000 * 60 * 60 * 24);
+    
+    if (daysDifference <= margin) {
+      correctCount++;
+    }
+  });
+  
+  return events.length > 0 ? Math.round((correctCount / events.length) * 100) : 0;
+}
+
+function isPointInHotspot(point: { x: number; y: number }, hotspot: any): boolean {
+  const { x, y } = point;
+  const { x: hx, y: hy, width, height } = hotspot;
+  
+  return x >= hx && x <= hx + width && y >= hy && y <= hy + height;
+}
 
 export const appRouter = router({
   // Public procedures
@@ -751,6 +873,7 @@ getLessonContent: publicProcedure
           }
         },
         assignments: true,
+				interactiveContents: true,
       }
     });
 
@@ -1368,6 +1491,210 @@ getUserAssignmentSubmission: publicProcedure
     });
 
     return submission;
+  }),
+
+	// Interactive content procedures
+createInteractiveContent: publicProcedure
+  .input(z.object({
+    title: z.string().min(1, 'Title is required'),
+    description: z.string().optional(),
+    type: z.enum(['DRAG_DROP', 'HOTSPOT', 'SEQUENCE', 'MATCHING', 'TIMELINE', 'SIMULATION', 'WIDGET', 'H5P']),
+    config: z.any(), // JSON configuration
+    content: z.any(), // JSON content data
+    lessonId: z.string(),
+    maxAttempts: z.number().int().min(1).default(1),
+    passingScore: z.number().min(0).max(100).nullable().optional(),
+    showFeedback: z.boolean().default(true),
+    allowReplay: z.boolean().default(true),
+    timeLimit: z.number().int().nullable().optional(),
+    creatorId: z.string(),
+    userRole: z.string(),
+  }))
+  .mutation(async ({ input }) => {
+    if (input.userRole !== 'ADMIN') {
+      throw new Error('Admin access required');
+    }
+
+    const database = getDb();
+    
+    // Verify user owns the lesson
+    const lesson = await database.lesson.findFirst({
+      where: { id: input.lessonId },
+      include: {
+        module: {
+          include: {
+            course: { select: { creatorId: true } }
+          }
+        }
+      }
+    });
+
+    if (!lesson || lesson.module.course.creatorId !== input.creatorId) {
+      throw new Error('Lesson not found or access denied');
+    }
+
+    const { creatorId, userRole, ...interactiveData } = input;
+
+    console.log('=== BACKEND CREATE INTERACTIVE CONTENT DEBUG ===');
+    console.log('Interactive data received:', interactiveData);
+
+    const interactiveContent = await database.interactiveContent.create({
+      data: interactiveData
+    });
+
+    console.log('Interactive content created successfully:', interactiveContent);
+    console.log('=================================================');
+
+    return interactiveContent;
+  }),
+
+getInteractiveContent: publicProcedure
+  .input(z.object({
+    contentId: z.string(),
+    userId: z.string().optional(),
+  }))
+  .query(async ({ input }) => {
+    const database = getDb();
+    
+    const interactiveContent = await database.interactiveContent.findUnique({
+      where: { id: input.contentId },
+      include: {
+        lesson: {
+          include: {
+            module: {
+              include: {
+                course: true
+              }
+            }
+          }
+        },
+        attempts: input.userId ? {
+          where: { userId: input.userId },
+          orderBy: { startedAt: 'desc' }
+        } : false
+      }
+    });
+
+    if (!interactiveContent) {
+      throw new Error('Interactive content not found');
+    }
+
+    // Check if user is enrolled (if userId provided)
+    if (input.userId) {
+      const enrollment = await database.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId: input.userId,
+            courseId: interactiveContent.lesson.module.course.id
+          }
+        }
+      });
+
+      if (!enrollment) {
+        throw new Error('Not enrolled in this course');
+      }
+    }
+
+    return interactiveContent;
+  }),
+
+submitInteractiveAttempt: publicProcedure
+  .input(z.object({
+    contentId: z.string(),
+    userId: z.string(),
+    responses: z.any(), // User's interaction responses
+    timeSpent: z.number().int().optional(),
+    completed: z.boolean().default(true),
+  }))
+  .mutation(async ({ input }) => {
+    const database = getDb();
+    
+    // Get interactive content details
+    const interactiveContent = await database.interactiveContent.findUnique({
+      where: { id: input.contentId },
+      include: {
+        lesson: {
+          include: {
+            module: {
+              include: {
+                course: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!interactiveContent) {
+      throw new Error('Interactive content not found');
+    }
+
+    // Check enrollment
+    const enrollment = await database.enrollment.findUnique({
+      where: {
+        userId_courseId: {
+          userId: input.userId,
+          courseId: interactiveContent.lesson.module.course.id
+        }
+      }
+    });
+
+    if (!enrollment) {
+      throw new Error('Not enrolled in this course');
+    }
+
+    // Check attempt limits
+    const existingAttempts = await database.interactiveAttempt.count({
+      where: {
+        userId: input.userId,
+        contentId: input.contentId
+      }
+    });
+
+    if (existingAttempts >= interactiveContent.maxAttempts) {
+      throw new Error('Maximum attempts exceeded');
+    }
+
+    // Calculate score based on interactive type and responses
+    const score = calculateInteractiveScore(interactiveContent, input.responses);
+
+    // Create attempt
+    const attempt = await database.interactiveAttempt.create({
+      data: {
+        userId: input.userId,
+        contentId: input.contentId,
+        responses: input.responses,
+        score,
+        completed: input.completed,
+        timeSpent: input.timeSpent,
+        completedAt: input.completed ? new Date() : null,
+      }
+    });
+
+    return {
+      attempt,
+      score,
+      passed: interactiveContent.passingScore ? score >= interactiveContent.passingScore : true,
+    };
+  }),
+
+getUserInteractiveAttempts: publicProcedure
+  .input(z.object({
+    contentId: z.string(),
+    userId: z.string(),
+  }))
+  .query(async ({ input }) => {
+    const database = getDb();
+    
+    const attempts = await database.interactiveAttempt.findMany({
+      where: {
+        contentId: input.contentId,
+        userId: input.userId,
+      },
+      orderBy: { startedAt: 'desc' }
+    });
+
+    return attempts;
   }),
 
 
