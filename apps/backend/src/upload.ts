@@ -1,5 +1,8 @@
 import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
+import { Request } from 'express';
+import { FileFilterCallback } from 'multer';
+
 
 // Configure Cloudinary
 cloudinary.config({
@@ -15,13 +18,13 @@ export const upload = multer({
   limits: {
     fileSize: 500 * 1024 * 1024, // 500MB limit
   },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('video/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only video files are allowed'), false);
-    }
+  fileFilter: (req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
+  if (file.mimetype.startsWith('video/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only video files are allowed'));
   }
+}
 });
 
 export const uploadVideoToCloudinary = async (buffer: Buffer, originalName: string) => {
