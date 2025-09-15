@@ -29,6 +29,7 @@ function CourseContentPage() {
   const { data: session } = useSession();
   const courseId = params.courseId as string;
 
+	const [quizBuilderReady, setQuizBuilderReady] = useState(false);
   const [showModuleForm, setShowModuleForm] = useState(false);
   const [showLessonForm, setShowLessonForm] = useState<string | null>(null);
   const [moduleFormData, setModuleFormData] = useState({
@@ -45,7 +46,6 @@ function CourseContentPage() {
 		videoDuration: 0,
 		quizData: null as any,
 	});
-
   // tRPC queries
   const { data: course } = trpc.getAdminCourses.useQuery(
     {
@@ -77,17 +77,27 @@ function CourseContentPage() {
 
   const createLessonMutation = trpc.createLesson.useMutation({
 		onSuccess: async (createdLesson) => {
+			console.log('=== LESSON CREATION SUCCESS ===');
+			console.log('Created lesson:', createdLesson);
+			console.log('Lesson type:', createdLesson.type);
+			console.log('Lesson ID:', createdLesson.id);
+			
 			// If it's a quiz lesson and has quiz data, create the quiz
 			if (lessonFormData.type === 'QUIZ' && lessonFormData.quizData) {
+				console.log('=== CREATING QUIZ ===');
+				console.log('Quiz data to send:', lessonFormData.quizData);
+				console.log('Lesson ID for quiz:', createdLesson.id);
+				
 				try {
-					await createQuizMutation.mutateAsync({
+					const quizResult = await createQuizMutation.mutateAsync({
 						...lessonFormData.quizData,
 						lessonId: createdLesson.id,
 						creatorId: session?.user?.id || '',
 						userRole: session?.user?.role || '',
 					});
+					console.log('Quiz creation result:', quizResult);
 				} catch (error) {
-					console.error('Failed to create quiz:', error);
+					console.error('Quiz creation failed:', error);
 					alert('Lesson created but quiz creation failed. Please try again.');
 				}
 			}
@@ -106,6 +116,7 @@ function CourseContentPage() {
 			});
 		},
 		onError: (error) => {
+			console.error('Lesson creation failed:', error);
 			alert(error.message);
 		}
 	});
@@ -155,15 +166,33 @@ const handleCreateLesson = (e: React.FormEvent) => {
 			lessonData.videoDuration = lessonFormData.videoDuration;
 		}
 
+		else if (lessonFormData.type === 'QUIZ') {
+			if (!lessonFormData.quizData || !lessonFormData.quizData.questions || lessonFormData.quizData.questions.length === 0) {
+      alert('Please add at least one question to the quiz before creating the lesson.');
+      return;
+    }
+    
+    if (!lessonFormData.quizData.title) {
+      alert('Please enter a quiz title.');
+      return;
+    }
+		 console.log('Data being sent to backend:', lessonData);
+  	createLessonMutation.mutate(lessonData);
+  }
+
 		console.log('=== LESSON FORM DATA DEBUG ===');
 		console.log('Form State:', lessonFormData);
+		console.log('Quiz Data:', lessonFormData.quizData);
 		console.log('Data being sent to backend:', lessonData);
+		console.log('Quiz Questions:', lessonFormData.quizData?.questions || 'No questions');
+  	console.log('================================');
 		console.log('Video URL in form state:', lessonFormData.videoUrl);
 		console.log('Video URL being sent:', lessonData.videoUrl);
 		console.log('================================');
 
 		createLessonMutation.mutate(lessonData);
 	};
+	
   const getLessonIcon = (type: string) => {
     switch (type) {
       case 'VIDEO': return <Play className="w-4 h-4" />;

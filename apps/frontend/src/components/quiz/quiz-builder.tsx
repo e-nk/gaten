@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, GripVertical, Settings, Eye } from "lucide-react";
+import { Plus, Trash2, GripVertical, Settings, Eye, CheckCircle } from "lucide-react";
 import { QuestionEditor } from './question-editors';
 
 interface QuizQuestion {
@@ -23,18 +23,20 @@ interface QuizBuilderProps {
 
 export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
   const [quizSettings, setQuizSettings] = useState({
-    title: initialData?.title || '',
-    description: initialData?.description || '',
-    timeLimit: initialData?.timeLimit || null,
-    maxAttempts: initialData?.maxAttempts || 1,
-    passingScore: initialData?.passingScore || 70,
-    shuffleQuestions: initialData?.shuffleQuestions || false,
-    showResults: initialData?.showResults || true,
-    showCorrectAnswers: initialData?.showCorrectAnswers || true,
-  });
+		title: initialData?.title || '',
+		description: initialData?.description || '',
+		timeLimit: initialData?.timeLimit || null, // Explicitly null instead of undefined
+		maxAttempts: initialData?.maxAttempts || 1,
+		passingScore: initialData?.passingScore || 70,
+		shuffleQuestions: initialData?.shuffleQuestions || false,
+		showResults: initialData?.showResults || true,
+		showCorrectAnswers: initialData?.showCorrectAnswers || true,
+	});
 
   const [questions, setQuestions] = useState<QuizQuestion[]>(initialData?.questions || []);
   const [showSettings, setShowSettings] = useState(false);
+	const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
 
   const addQuestion = (type: QuizQuestion['type']) => {
     const newQuestion: QuizQuestion = {
@@ -92,17 +94,49 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
   };
 
   const handleSave = (e?: React.MouseEvent) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    
-    const quizData = {
-      ...quizSettings,
-      questions: questions.map((q, index) => ({ ...q, order: index }))
-    };
-    onSave(quizData);
-  };
+		if (e) {
+			e.preventDefault();
+			e.stopPropagation();
+		}
+		
+		// Validate quiz data
+		if (!quizSettings.title.trim()) {
+			alert('Please enter a quiz title');
+			return;
+		}
+		
+		if (questions.length === 0) {
+			alert('Please add at least one question');
+			return;
+		}
+		
+		// Check if all questions have content
+		const incompleteQuestions = questions.filter(q => !q.question.trim());
+		if (incompleteQuestions.length > 0) {
+			alert('Please fill in all question texts');
+			return;
+		}
+		
+		setSaveStatus('saving');
+		
+		const quizData = {
+			...quizSettings,
+			questions: questions.map((q, index) => ({ ...q, order: index }))
+		};
+		
+		console.log('=== QUIZ BUILDER HANDLE SAVE ===');
+		console.log('Saving quiz data:', quizData);
+		console.log('Number of questions:', questions.length);
+		
+		// Simulate brief delay for better UX
+		setTimeout(() => {
+			onSave(quizData);
+			setSaveStatus('saved');
+			
+			// Reset to idle after 2 seconds
+			setTimeout(() => setSaveStatus('idle'), 2000);
+		}, 300);
+	};
 
   return (
     <div className="space-y-6">
@@ -124,12 +158,21 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
             Settings
           </Button>
           <Button 
-            type="button" // Prevent form submission
-            onClick={handleSave} 
-            className="bg-school-primary-blue text-white"
-          >
-            Save Quiz
-          </Button>
+						type="button"
+						onClick={handleSave} 
+						disabled={saveStatus === 'saving'}
+						className={`${
+							saveStatus === 'saved' 
+								? 'bg-green-600 hover:bg-green-700' 
+								: 'bg-school-primary-blue hover:bg-school-primary-blue/90'
+						} text-white transition-colors`}
+					>
+						{saveStatus === 'saving' && (
+							<div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+						)}
+						{saveStatus === 'saved' && <CheckCircle className="w-4 h-4 mr-2" />}
+						{saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved!' : 'Save Quiz'}
+					</Button>
         </div>
       </div>
 
@@ -176,16 +219,16 @@ export function QuizBuilder({ onSave, initialData }: QuizBuilderProps) {
                 Time Limit (minutes)
               </label>
               <input
-                type="number"
-                value={quizSettings.timeLimit || ''}
-                onChange={(e) => setQuizSettings(prev => ({ 
-                  ...prev, 
-                  timeLimit: e.target.value ? parseInt(e.target.value) : null 
-                }))}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
-                placeholder="No limit"
-              />
+								type="number"
+								value={quizSettings.timeLimit || ''}
+								onChange={(e) => setQuizSettings(prev => ({ 
+									...prev, 
+									timeLimit: e.target.value ? parseInt(e.target.value) : null // Explicitly null
+								}))}
+								onClick={(e) => e.stopPropagation()}
+								className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+								placeholder="No limit"
+							/>
             </div>
 
             <div>

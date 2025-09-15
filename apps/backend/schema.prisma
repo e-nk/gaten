@@ -272,7 +272,7 @@ model Quiz {
   description String?
   
   // Quiz Settings
-  timeLimit      Int?     // minutes, null = no limit
+  timeLimit      Int?     // This should allow null (the ? makes it optional)
   maxAttempts    Int      @default(1)
   passingScore   Float    @default(70.0) // percentage
   shuffleQuestions Boolean @default(false)

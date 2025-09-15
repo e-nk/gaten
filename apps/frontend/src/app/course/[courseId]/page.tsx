@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/navigation/navbar";
 import { QuizPlayer } from "@/components/quiz/quiz-player";
+import { QuizAnswerReview } from "@/components/quiz/quiz-answer-review";
 import { trpc } from "@/trpc/provider";
 import ReactPlayer from 'react-player';
 import { 
@@ -24,23 +25,34 @@ import {
   ChevronUp,
   ChevronDown
 } from "lucide-react";
+import { QuizResults } from "@/components/quiz/quiz-results";
 
 export default function CoursePlayerPage() {
   const params = useParams();
   const router = useRouter();
   const { data: session } = useSession();
   const courseId = params.courseId as string;
+	const [quizResults, setQuizResults] = useState<any>(null);
+	const [showQuizResults, setShowQuizResults] = useState(false);
 
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [videoProgress, setVideoProgress] = useState(0);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
+	const [showAnswerReview, setShowAnswerReview] = useState(false);
+	const [reviewAttempt, setReviewAttempt] = useState<any>(null);
 
   // tRPC queries
   const { data: courseData, isLoading } = trpc.getCourseForStudent.useQuery({
     courseId,
     userId: session?.user?.id
   });
+
+	// Add this debug query
+	const { data: debugLessonData } = trpc.debugLesson.useQuery(
+		{ lessonId: selectedLessonId! },
+		{ enabled: !!selectedLessonId }
+	);
 
   const { data: lessonData } = trpc.getLessonContent.useQuery(
     {
@@ -67,7 +79,15 @@ export default function CoursePlayerPage() {
 			userId: session?.user?.id
 		},
 		{
-			enabled: !!lessonData?.lesson.quizzes?.[0]?.id && !!session?.user?.id
+			enabled: !!lessonData?.lesson.quizzes?.[0]?.id && !!session?.user?.id,
+			onSuccess: (data) => {
+				console.log('=== QUIZ DATA RETRIEVED ===');
+				console.log('Quiz data:', data);
+			},
+			onError: (error) => {
+				console.error('=== QUIZ RETRIEVAL ERROR ===');
+				console.error('Error:', error);
+			}
 		}
 	);
 
@@ -92,11 +112,16 @@ export default function CoursePlayerPage() {
 
 	const submitQuizMutation = trpc.submitQuizAttempt.useMutation({
 		onSuccess: (result) => {
-			alert(`Quiz submitted! Score: ${result.score.toFixed(1)}% (${result.passed ? 'Passed' : 'Failed'})`);
+			setQuizResults(result);
+			setShowQuizResults(true);
+			
+			// Mark lesson complete if passed
 			if (result.passed && !isLessonCompleted(selectedLessonId!)) {
 				handleMarkComplete();
 			}
-			window.location.reload(); // Refresh to show updated attempts
+			
+			// Refresh attempts data
+			window.location.reload();
 		},
 		onError: (error) => {
 			alert('Failed to submit quiz: ' + error.message);
@@ -556,7 +581,115 @@ export default function CoursePlayerPage() {
 
 								{lessonData.lesson.type === 'QUIZ' && (
 									<div className="bg-white border border-gray-200 rounded-lg p-6">
-										{quizData ? (
+										{showQuizResults && quizResults ? (
+											// Show results from current session
+											<QuizResults
+												result={quizResults}
+												quiz={quizData}
+												canRetake={(quizAttempts?.length || 0) < (quizData?.maxAttempts || 1)}
+												onRetakeQuiz={() => {
+													setShowQuizResults(false);
+													setQuizResults(null);
+												}}
+												onViewAnswers={() => {
+													setReviewAttempt(quizResults.attempt);
+													setShowAnswerReview(true);
+												}}
+											/>
+												)	: showAnswerReview && reviewAttempt && quizData ? (
+											<QuizAnswerReview
+												quiz={quizData}
+												attempt={reviewAttempt}
+												onClose={() => {
+													setShowAnswerReview(false);
+													setReviewAttempt(null);
+												}}
+												onRetake={() => {
+													setShowAnswerReview(false);
+													setReviewAttempt(null);
+													setShowQuizResults(false);
+													setQuizResults(null);
+												}}
+											/>
+										) : (quizAttempts && quizAttempts.length > 0) ? (
+											// Show results from previous attempts if any exist
+											<div className="space-y-4">
+												{/* Latest Attempt Results */}
+												<QuizResults
+													result={{
+														attempt: quizAttempts[0], // Most recent attempt
+														score: quizAttempts[0].score,
+														passed: quizAttempts[0].passed,
+														totalPoints: quizAttempts[0].totalPoints,
+														pointsEarned: quizAttempts[0].pointsEarned,
+													}}
+													quiz={quizData}
+													canRetake={quizAttempts.length < (quizData?.maxAttempts || 1)}
+													onRetakeQuiz={() => {
+														// Allow retake if attempts remaining
+														if (quizAttempts.length < (quizData?.maxAttempts || 1)) {
+															setShowQuizResults(false);
+															setQuizResults(null);
+														}
+													}}
+													onViewAnswers={() => {
+														setReviewAttempt(quizAttempts[0]);
+														setShowAnswerReview(true);
+													}}
+												/>
+
+												{/* Attempt History */}
+												{quizAttempts.length > 1 && (
+													<div className="mt-6 border-t border-gray-200 pt-6">
+														<h3 className="text-lg font-semibold text-school-primary-blue mb-4">
+															Previous Attempts
+														</h3>
+														<div className="space-y-2">
+															{quizAttempts.slice(1).map((attempt, index) => (
+																<div key={attempt.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+																	<div className="flex items-center">
+																		<span className="text-sm font-medium text-gray-700">
+																			Attempt #{quizAttempts.length - index - 1}
+																		</span>
+																		<span className="mx-2 text-gray-400">•</span>
+																		<span className="text-sm text-gray-600">
+																			{new Date(attempt.submittedAt || attempt.createdAt).toLocaleDateString()}
+																		</span>
+																	</div>
+																	<div className="flex items-center space-x-3">
+																		<span className={`text-sm font-medium ${
+																			attempt.passed ? 'text-green-600' : 'text-red-600'
+																		}`}>
+																			{attempt.score.toFixed(1)}%
+																		</span>
+																		<span className={`px-2 py-1 rounded-full text-xs font-medium ${
+																			attempt.passed 
+																				? 'bg-green-100 text-green-800' 
+																				: 'bg-red-100 text-red-800'
+																		}`}>
+																			{attempt.passed ? 'Passed' : 'Failed'}
+																		</span>
+																		{quizData?.showCorrectAnswers && (
+																			<Button
+																				size="sm"
+																				variant="outline"
+																				onClick={() => {
+																					setReviewAttempt(attempt);
+																					setShowAnswerReview(true);
+																				}}
+																			>
+																				Review
+																			</Button>
+																		)}
+																	</div>
+																</div>
+															))}
+														</div>
+													</div>
+												)}
+											</div>
+										) : quizData ? (
+											// Show quiz player for first attempt
 											<QuizPlayer
 												quiz={quizData}
 												existingAttempts={quizAttempts || []}
@@ -571,6 +704,7 @@ export default function CoursePlayerPage() {
 												}}
 											/>
 										) : (
+											// No quiz data available
 											<div className="text-center py-12">
 												<div className="w-16 h-16 bg-school-primary-nyanza rounded-full flex items-center justify-center mx-auto mb-4">
 													<HelpCircle className="w-8 h-8 text-school-primary-blue" />
@@ -585,6 +719,7 @@ export default function CoursePlayerPage() {
 										)}
 									</div>
 								)}
+
 
                 {/* Other Content Types */}
                 {(lessonData.lesson.type === 'ASSIGNMENT' || 

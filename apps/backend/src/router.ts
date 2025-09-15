@@ -887,7 +887,7 @@ createQuiz: publicProcedure
     title: z.string().min(1, 'Title is required'),
     description: z.string().optional(),
     lessonId: z.string(),
-    timeLimit: z.number().int().optional(),
+    timeLimit: z.number().int().nullable().optional(), // Changed: allow null/undefined
     maxAttempts: z.number().int().min(1).default(1),
     passingScore: z.number().min(0).max(100).default(70),
     shuffleQuestions: z.boolean().default(false),
@@ -930,9 +930,17 @@ createQuiz: publicProcedure
 
     const { questions, creatorId, userRole, ...quizData } = input;
 
+    // Debug: Log what we're creating
+    console.log('=== BACKEND CREATE QUIZ DEBUG ===');
+    console.log('Quiz data received:', quizData);
+    console.log('Questions received:', questions);
+    console.log('Time limit value:', input.timeLimit);
+    console.log('Time limit type:', typeof input.timeLimit);
+
     const quiz = await database.quiz.create({
       data: {
         ...quizData,
+        timeLimit: input.timeLimit || null, // Ensure null if undefined
         questions: {
           create: questions.map(q => ({
             type: q.type,
@@ -951,6 +959,9 @@ createQuiz: publicProcedure
         }
       }
     });
+
+    console.log('Quiz created successfully:', quiz);
+    console.log('===================================');
 
     return quiz;
   }),

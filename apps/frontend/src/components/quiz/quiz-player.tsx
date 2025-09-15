@@ -84,19 +84,19 @@ export function QuizPlayer({ quiz, onSubmit, existingAttempts = [], isSubmitting
     setCurrentQuestionIndex(index);
   };
 
-  if (attemptsRemaining <= 0) {
-    return (
-      <div className="bg-white border border-school-primary-paledogwood rounded-lg p-8 text-center">
-        <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-        <h3 className="text-xl font-bold text-school-primary-blue mb-2">
-          No Attempts Remaining
-        </h3>
-        <p className="text-gray-600">
-          You have used all {quiz.maxAttempts} attempts for this quiz.
-        </p>
-      </div>
-    );
-  }
+  // if (attemptsRemaining <= 0) {
+  //   return (
+  //     <div className="bg-white border border-school-primary-paledogwood rounded-lg p-8 text-center">
+  //       <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+  //       <h3 className="text-xl font-bold text-school-primary-blue mb-2">
+  //         No Attempts Remaining
+  //       </h3>
+  //       <p className="text-gray-600">
+  //         You have used all {quiz.maxAttempts} attempts for this quiz.
+  //       </p>
+  //     </div>
+  //   );
+  // }
 
   return (
     <div className="bg-white border border-school-primary-paledogwood rounded-lg overflow-hidden">
