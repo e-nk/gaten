@@ -17,6 +17,7 @@ import {
 	XCircle,
 	CirclePlus,
 	X,
+	ChevronDown,
 } from "lucide-react";
 
 interface InteractivePlayerProps {
@@ -1561,32 +1562,463 @@ function TimelineRenderer({ content, responses, onUpdate }: any) {
   );
 }
 
-// Placeholder renderers for other interactive types
+function SimulationRenderer({ content, responses, onUpdate }: any) {
+  const [currentScenarioIndex, setCurrentScenarioIndex] = useState(responses.currentScenario || 0);
+  const [variables, setVariables] = useState(() => {
+    const initialVars: any = {};
+    (content.variables || []).forEach((variable: any) => {
+      initialVars[variable.name] = responses.variables?.[variable.name] ?? variable.initialValue;
+    });
+    return initialVars;
+  });
+  const [choiceHistory, setChoiceHistory] = useState(responses.choiceHistory || []);
+  const [simulationComplete, setSimulationComplete] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
-function DefaultRenderer({ type, content, responses, onUpdate }: any) {
+  const scenarios = content.scenarios || [];
+  const currentScenario = scenarios[currentScenarioIndex];
+  const simulationType = content.simulationType || 'scenario';
+
+  const handleChoice = (choice: any) => {
+    if (!currentScenario) return;
+
+    // Record the choice
+    const newChoice = {
+      scenarioIndex: currentScenarioIndex,
+      choiceId: choice.id,
+      choiceText: choice.text,
+      consequence: choice.consequence,
+      isCorrect: choice.isCorrect,
+      timestamp: new Date().toISOString()
+    };
+
+    const newChoiceHistory = [...choiceHistory, newChoice];
+    setChoiceHistory(newChoiceHistory);
+
+    // Update variables based on choice consequences
+    const newVariables = { ...variables };
+    if (choice.variableChanges) {
+      Object.entries(choice.variableChanges).forEach(([varName, change]: [string, any]) => {
+        if (newVariables[varName] !== undefined) {
+          newVariables[varName] += change;
+        }
+      });
+    }
+    setVariables(newVariables);
+
+    // Show feedback if there's a consequence
+    if (choice.consequence) {
+      setFeedback(choice.consequence);
+      setTimeout(() => setFeedback(null), 4000);
+    }
+
+    // Check if this scenario is an endpoint
+    if (currentScenario.isEndpoint) {
+      setSimulationComplete(true);
+    } else {
+      // Move to next scenario (for now, just increment - in advanced version, use choice.nextScenario)
+      const nextIndex = currentScenarioIndex + 1;
+      if (nextIndex < scenarios.length) {
+        setCurrentScenarioIndex(nextIndex);
+      } else {
+        setSimulationComplete(true);
+      }
+    }
+
+    // Update responses
+    onUpdate({
+      ...responses,
+      currentScenario: currentScenarioIndex + 1,
+      variables: newVariables,
+      choiceHistory: newChoiceHistory,
+      completed: simulationComplete || currentScenarioIndex + 1 >= scenarios.length
+    });
+  };
+
+  const resetSimulation = () => {
+    setCurrentScenarioIndex(0);
+    
+    const initialVars: any = {};
+    (content.variables || []).forEach((variable: any) => {
+      initialVars[variable.name] = variable.initialValue;
+    });
+    setVariables(initialVars);
+    
+    setChoiceHistory([]);
+    setSimulationComplete(false);
+    setFeedback(null);
+    
+    onUpdate({
+      currentScenario: 0,
+      variables: initialVars,
+      choiceHistory: [],
+      completed: false
+    });
+  };
+
+  const getTotalScore = () => {
+    return choiceHistory.reduce((total, choice) => {
+      return total + (choice.isCorrect ? (scenarios[choice.scenarioIndex]?.points || 10) : 0);
+    }, 0);
+  };
+
+  const getCorrectChoices = () => {
+    return choiceHistory.filter(choice => choice.isCorrect).length;
+  };
+
+  if (scenarios.length === 0) {
+    return (
+      <div className="text-center py-12 text-gray-500">
+        <Zap className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+        <p>This simulation hasn't been configured yet.</p>
+      </div>
+    );
+  }
+
+  if (simulationComplete) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle className="w-10 h-10 text-green-600" />
+          </div>
+          <h3 className="text-2xl font-bold text-school-primary-blue mb-2">
+            Simulation Complete!
+          </h3>
+          <p className="text-gray-600">You've completed the interactive simulation.</p>
+        </div>
+
+        {/* Results Summary */}
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+          <h4 className="font-medium text-school-primary-blue mb-4">Results Summary</h4>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-blue-600">{choiceHistory.length}</div>
+              <div className="text-sm text-gray-600">Decisions Made</div>
+            </div>
+            
+            <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-green-600">{getCorrectChoices()}</div>
+              <div className="text-sm text-gray-600">Correct Choices</div>
+            </div>
+            
+            <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-purple-600">{getTotalScore()}</div>
+              <div className="text-sm text-gray-600">Total Points</div>
+            </div>
+          </div>
+
+          {/* Variable Final States */}
+          {Object.keys(variables).length > 0 && (
+            <div className="mb-6">
+              <h5 className="font-medium text-gray-700 mb-3">Final Values:</h5>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {Object.entries(variables).map(([name, value]) => (
+                  <div key={name} className="bg-white border border-gray-200 rounded p-3 text-center">
+                    <div className="font-medium text-gray-900">{String(value)}</div>
+                    <div className="text-xs text-gray-600 capitalize">{name}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Choice History */}
+          <div className="mb-6">
+            <h5 className="font-medium text-gray-700 mb-3">Decision Path:</h5>
+            <div className="space-y-2">
+              {choiceHistory.map((choice, index) => (
+                <div
+                  key={index}
+                  className={`p-3 rounded-lg border ${
+                    choice.isCorrect 
+                      ? 'border-green-200 bg-green-50' 
+                      : 'border-red-200 bg-red-50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="font-medium text-sm text-gray-900">
+                        Step {index + 1}: {choice.choiceText}
+                      </div>
+                      {choice.consequence && (
+                        <div className="text-xs text-gray-600 mt-1">{choice.consequence}</div>
+                      )}
+                    </div>
+                    {choice.isCorrect ? (
+                      <CheckCircle className="w-4 h-4 text-green-600 ml-2" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-red-600 ml-2" />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-center">
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                resetSimulation();
+              }}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="text-center">
         <h3 className="text-lg font-semibold text-school-primary-blue mb-2">
-          Interactive Content
+          Interactive Simulation
         </h3>
-        <p className="text-gray-600">Custom interactive experience</p>
+        <p className="text-gray-600">Make decisions and see the consequences unfold</p>
       </div>
 
-      <div className="text-center py-12 text-gray-500">
-        <Zap className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-        <p>{type.replace('_', ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())} content</p>
-        <p className="text-sm mt-2">Custom interactive component implementation</p>
-        
-        <div className="mt-6">
-          <Button
-            onClick={() => onUpdate({ ...responses, completed: true })}
-            className="bg-purple-600 hover:bg-purple-700 text-white"
-          >
-            Mark as Completed
-          </Button>
+      {/* Progress and Variables */}
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <span className="text-sm font-medium text-gray-700">Progress:</span>
+            <span className="ml-2 text-sm text-gray-600">
+              Scenario {currentScenarioIndex + 1} of {scenarios.length}
+            </span>
+          </div>
+          <div>
+            <span className="text-sm font-medium text-gray-700">Score:</span>
+            <span className="ml-2 text-sm text-purple-600 font-medium">{getTotalScore()} points</span>
+          </div>
         </div>
+
+        {/* Progress Bar */}
+        <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
+          <div 
+            className="bg-purple-500 h-2 rounded-full transition-all duration-300"
+            style={{ width: `${((currentScenarioIndex + 1) / scenarios.length) * 100}%` }}
+          ></div>
+        </div>
+
+        {/* Variables Display */}
+        {Object.keys(variables).length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {Object.entries(variables).map(([name, value]) => (
+              <div key={name} className="bg-white border border-gray-200 rounded p-2 text-center">
+                <div className="font-medium text-gray-900">{String(value)}</div>
+                <div className="text-xs text-gray-600 capitalize">{name}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Current Scenario */}
+      {currentScenario && (
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="mb-6">
+            <h4 className="text-xl font-bold text-school-primary-blue mb-3">
+              {currentScenario.title || `Scenario ${currentScenarioIndex + 1}`}
+            </h4>
+            <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+              {currentScenario.description}
+            </div>
+          </div>
+
+          {/* Choices */}
+          {currentScenario.choices && currentScenario.choices.length > 0 && (
+            <div>
+              <h5 className="font-medium text-gray-700 mb-4">What do you choose?</h5>
+              <div className="space-y-3">
+                {currentScenario.choices.map((choice: any, index: number) => (
+                  <button
+                    key={choice.id}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleChoice(choice);
+                    }}
+                    className="w-full p-4 text-left border-2 border-gray-200 rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-all group"
+                  >
+                    <div className="flex items-start">
+                      <span className="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-sm font-medium mr-3 group-hover:bg-purple-200">
+                        {String.fromCharCode(65 + index)}
+                      </span>
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900 group-hover:text-purple-800">
+                          {choice.text}
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-purple-600 ml-2" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(!currentScenario.choices || currentScenario.choices.length === 0) && (
+            <div className="text-center py-8">
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Zap className="w-6 h-6 text-purple-600" />
+              </div>
+              <p className="text-gray-600 mb-4">This scenario is complete.</p>
+              <Button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setSimulationComplete(true);
+                }}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                Finish Simulation
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Feedback Modal */}
+      {feedback && (
+        <div className="fixed top-4 right-4 z-50 max-w-sm">
+          <div className="bg-blue-500 text-white p-4 rounded-lg shadow-lg">
+            <div className="flex items-start">
+              <div className="flex-1">
+                <div className="text-sm font-medium mb-1">Consequence:</div>
+                <div className="text-sm">{feedback}</div>
+              </div>
+              <Button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setFeedback(null);
+                }}
+                size="sm"
+                variant="outline"
+                className="ml-3 text-white border-white hover:bg-white hover:text-blue-500"
+              >
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Choice History (Expandable) */}
+      {choiceHistory.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <details className="group">
+            <summary className="flex items-center justify-between cursor-pointer">
+              <span className="font-medium text-gray-700">Decision History ({choiceHistory.length})</span>
+              <ChevronDown className="w-4 h-4 text-gray-400 group-open:rotate-180 transition-transform" />
+            </summary>
+            
+            <div className="mt-4 space-y-2">
+              {choiceHistory.map((choice, index) => (
+                <div
+                  key={index}
+                  className={`p-2 rounded border text-sm ${
+                    choice.isCorrect 
+                      ? 'border-green-200 bg-green-50' 
+                      : 'border-red-200 bg-red-50'
+                  }`}
+                >
+                  <div className="flex items-center">
+                    {choice.isCorrect ? (
+                      <CheckCircle className="w-3 h-3 text-green-600 mr-2" />
+                    ) : (
+                      <XCircle className="w-3 h-3 text-red-600 mr-2" />
+                    )}
+                    <span className="font-medium">Step {index + 1}:</span>
+                    <span className="ml-1">{choice.choiceText}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        </div>
+      )}
+
+      {/* Instructions */}
+      <div className="text-center text-sm text-gray-600 space-y-1">
+        <p>💡 <strong>How simulations work:</strong></p>
+        <p>• Read each scenario carefully</p>
+        <p>• Choose the option you think is best</p>
+        <p>• See the consequences of your decisions</p>
+        <p>• Learn from the outcomes and continue</p>
       </div>
     </div>
   );
+}
+
+// Placeholder renderers for other interactive types
+
+function DefaultRenderer({ type, content, responses, onUpdate }: any) {
+  switch (type) {
+    case 'SIMULATION':
+      return <SimulationRenderer content={content} responses={responses} onUpdate={onUpdate} />;
+    case 'WIDGET':
+      return (
+        <div className="space-y-6">
+          <div className="text-center">
+            <h3 className="text-lg font-semibold text-school-primary-blue mb-2">
+              Custom Widget
+            </h3>
+            <p className="text-gray-600">Interactive custom component</p>
+          </div>
+
+          <div className="text-center py-12 text-gray-500">
+            <Zap className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+            <p>Custom widget will be implemented based on specific requirements</p>
+            <p className="text-sm mt-2">This framework supports any custom interactive content</p>
+            
+            <div className="mt-6">
+              <Button
+                onClick={() => onUpdate({ ...responses, completed: true })}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                Mark as Completed
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    default:
+      return (
+        <div className="space-y-6">
+          <div className="text-center">
+            <h3 className="text-lg font-semibold text-school-primary-blue mb-2">
+              Interactive Content
+            </h3>
+            <p className="text-gray-600">Custom interactive experience</p>
+          </div>
+
+          <div className="text-center py-12 text-gray-500">
+            <Zap className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+            <p>{type.replace('_', ' ').toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())} content</p>
+            <p className="text-sm mt-2">Custom interactive component implementation</p>
+            
+            <div className="mt-6">
+              <Button
+                onClick={() => onUpdate({ ...responses, completed: true })}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                Mark as Completed
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+  }
 }

@@ -255,6 +255,37 @@ function calculateTimelineScore(content: any, responses: any): number {
   return Math.round((correctPlacements / events.length) * 100);
 }
 
+function calculateSimulationScore(content: any, responses: any): number {
+  const choiceHistory = responses.choiceHistory || [];
+  const scenarios = content.scenarios || [];
+  
+  if (choiceHistory.length === 0) return 0;
+  
+  // Calculate score based on correct choices and scenario points
+  let totalScore = 0;
+  let possibleScore = 0;
+  
+  choiceHistory.forEach((choice: any) => {
+    const scenario = scenarios[choice.scenarioIndex];
+    if (scenario) {
+      const points = scenario.points || 10; // Default 10 points per scenario
+      possibleScore += points;
+      
+      if (choice.isCorrect) {
+        totalScore += points;
+      }
+    }
+  });
+  
+  // Also add completion bonus if all scenarios were completed
+  if (responses.completed) {
+    const completionBonus = Math.round(possibleScore * 0.1); // 10% bonus
+    totalScore += completionBonus;
+  }
+  
+  return possibleScore > 0 ? Math.round((totalScore / possibleScore) * 100) : 0;
+}
+
 function isPointInHotspot(point: { x: number; y: number }, hotspot: any): boolean {
   const { x, y } = point;
   const { x: hx, y: hy, width, height } = hotspot;

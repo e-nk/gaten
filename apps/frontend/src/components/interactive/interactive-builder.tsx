@@ -71,74 +71,117 @@ export function InteractiveBuilder({ onSave, initialData }: InteractiveBuilderPr
   };
 
   const validateContentByType = (): boolean => {
-		const { type, content } = interactiveSettings;
-		
-		switch (type) {
-			case 'DRAG_DROP':
-				if (!content.items || content.items.length === 0) {
-					alert('Please add at least one drag and drop item');
-					return false;
-				}
-				if (!content.targets || content.targets.length === 0) {
-					alert('Please add at least one drop target');
-					return false;
-				}
-				break;
-				
-			case 'HOTSPOT':
-				if (!content.imageUrl) {
-					alert('Please upload an image for hotspot activity');
-					return false;
-				}
-				if (!content.hotspots || content.hotspots.length === 0) {
-					alert('Please add at least one hotspot');
-					return false;
-				}
-				break;
-				
-			case 'SEQUENCE':
-				if (!content.items || content.items.length < 2) {
-					alert('Please add at least two items to sequence');
-					return false;
-				}
-				break;
-				
-			case 'MATCHING':
-				if (!content.leftItems || content.leftItems.length === 0) {
-					alert('Please add items to match');
-					return false;
-				}
-				if (!content.rightItems || content.rightItems.length === 0) {
-					alert('Please add target items');
-					return false;
-				}
-				break;
-				
-			case 'TIMELINE':
-				if (!content.events || content.events.length < 2) {
-					alert('Please add at least two events to the timeline');
-					return false;
-				}
-				// Check if all events have titles and valid dates
-				const invalidEvents = content.events.filter((event: any) => 
-					!event.title || !event.year || event.year < (content.startYear || 2000) || event.year > (content.endYear || 2030)
-				);
-				if (invalidEvents.length > 0) {
-					alert('Please ensure all events have titles and valid dates within the timeline range');
-					return false;
-				}
-				break;
-				
-			default:
-				// Basic content check for other types
-				if (!content.description && !content.items) {
-					alert('Please configure the interactive content');
-					return false;
-				}
-		}
-		
-		return true;
-	};
+  const { type, content } = interactiveSettings;
+  
+  switch (type) {
+    case 'DRAG_DROP':
+      if (!content.items || content.items.length === 0) {
+        alert('Please add at least one drag and drop item');
+        return false;
+      }
+      if (!content.targets || content.targets.length === 0) {
+        alert('Please add at least one drop target');
+        return false;
+      }
+      break;
+      
+    case 'HOTSPOT':
+      if (!content.imageUrl) {
+        alert('Please upload an image for hotspot activity');
+        return false;
+      }
+      if (!content.hotspots || content.hotspots.length === 0) {
+        alert('Please add at least one hotspot');
+        return false;
+      }
+      break;
+      
+    case 'SEQUENCE':
+      if (!content.items || content.items.length < 2) {
+        alert('Please add at least two items to sequence');
+        return false;
+      }
+      break;
+      
+    case 'MATCHING':
+      if (!content.leftItems || content.leftItems.length === 0) {
+        alert('Please add items to match');
+        return false;
+      }
+      if (!content.rightItems || content.rightItems.length === 0) {
+        alert('Please add target items');
+        return false;
+      }
+      break;
+      
+    case 'TIMELINE':
+      if (!content.events || content.events.length < 2) {
+        alert('Please add at least two events to the timeline');
+        return false;
+      }
+      // Check if all events have titles and valid dates
+      const invalidEvents = content.events.filter((event: any) => 
+        !event.title || !event.year || event.year < (content.startYear || 2000) || event.year > (content.endYear || 2030)
+      );
+      if (invalidEvents.length > 0) {
+        alert('Please ensure all events have titles and valid dates within the timeline range');
+        return false;
+      }
+      break;
+      
+    case 'SIMULATION':
+      // Check if simulation type is selected
+      if (!content.simulationType) {
+        alert('Please select a simulation type');
+        return false;
+      }
+      
+      // Check if at least one scenario exists
+      if (!content.scenarios || content.scenarios.length === 0) {
+        alert('Please add at least one scenario to the simulation');
+        return false;
+      }
+      
+      // Check if scenarios have required fields
+      const invalidScenarios = content.scenarios.filter((scenario: any) => 
+        !scenario.title || !scenario.description
+      );
+      if (invalidScenarios.length > 0) {
+        alert('Please ensure all scenarios have titles and descriptions');
+        return false;
+      }
+      
+      // Check if scenarios have choices (unless they're endpoints)
+      const scenariosWithoutChoices = content.scenarios.filter((scenario: any) => 
+        !scenario.isEndpoint && (!scenario.choices || scenario.choices.length === 0)
+      );
+      if (scenariosWithoutChoices.length > 0) {
+        alert('Please add choices to all non-endpoint scenarios');
+        return false;
+      }
+      
+      // Check if choices have text
+      for (let scenario of content.scenarios) {
+        if (scenario.choices && scenario.choices.length > 0) {
+          const invalidChoices = scenario.choices.filter((choice: any) => !choice.text);
+          if (invalidChoices.length > 0) {
+            alert(`Please fill in text for all choices in "${scenario.title}"`);
+            return false;
+          }
+        }
+      }
+      break;
+      
+    default:
+      // Basic content check for other types
+      if (!content.description && !content.items && !content.scenarios) {
+        alert('Please configure the interactive content');
+        return false;
+      }
+  }
+  
+  return true;
+};
 
   const updateContentField = (field: string, value: any) => {
     setInteractiveSettings(prev => ({
@@ -2376,14 +2419,575 @@ function TimelineEditor({ content, onUpdate }: { content: any; onUpdate: (field:
   );
 }
 
-// Placeholder editors for other types
+
 
 function SimulationEditor({ content, onUpdate }: { content: any; onUpdate: (field: string, value: any) => void }) {
+  const [simulationType, setSimulationType] = useState(content.simulationType || 'scenario');
+  const [scenarios, setScenarios] = useState(content.scenarios || []);
+  const [variables, setVariables] = useState(content.variables || []);
+  const [showInstructions, setShowInstructions] = useState(true);
+
+  const simulationTypes = [
+    { value: 'scenario', label: 'Decision Tree', description: 'Branching scenarios with choices' },
+    { value: 'calculation', label: 'Interactive Calculator', description: 'Math/physics simulations' },
+    { value: 'experiment', label: 'Virtual Experiment', description: 'Scientific simulations' },
+    { value: 'business', label: 'Business Simulation', description: 'Economic/management scenarios' },
+    { value: 'custom', label: 'Custom Logic', description: 'Advanced custom interactions' }
+  ];
+
+  const addScenario = () => {
+    const newScenario = {
+      id: String(Date.now()),
+      title: '',
+      description: '',
+      choices: [],
+      outcome: '',
+      isEndpoint: false,
+      nextScenario: null,
+      points: 0
+    };
+    const newScenarios = [...scenarios, newScenario];
+    setScenarios(newScenarios);
+    onUpdate('scenarios', newScenarios);
+  };
+
+  const addVariable = () => {
+    const newVariable = {
+      id: String(Date.now()),
+      name: '',
+      type: 'number', // number, text, boolean
+      initialValue: 0,
+      min: 0,
+      max: 100,
+      description: ''
+    };
+    const newVariables = [...variables, newVariable];
+    setVariables(newVariables);
+    onUpdate('variables', newVariables);
+  };
+
+  const updateScenario = (index: number, field: string, value: any) => {
+    const newScenarios = [...scenarios];
+    newScenarios[index] = { ...newScenarios[index], [field]: value };
+    setScenarios(newScenarios);
+    onUpdate('scenarios', newScenarios);
+  };
+
+  const updateVariable = (index: number, field: string, value: any) => {
+    const newVariables = [...variables];
+    newVariables[index] = { ...newVariables[index], [field]: value };
+    setVariables(newVariables);
+    onUpdate('variables', newVariables);
+  };
+
+  const addChoice = (scenarioIndex: number) => {
+    const newChoice = {
+      id: String(Date.now()),
+      text: '',
+      consequence: '',
+      variableChanges: {},
+      nextScenario: null,
+      isCorrect: false
+    };
+    
+    const newScenarios = [...scenarios];
+    if (!newScenarios[scenarioIndex].choices) {
+      newScenarios[scenarioIndex].choices = [];
+    }
+    newScenarios[scenarioIndex].choices.push(newChoice);
+    setScenarios(newScenarios);
+    onUpdate('scenarios', newScenarios);
+  };
+
+  const updateChoice = (scenarioIndex: number, choiceIndex: number, field: string, value: any) => {
+    const newScenarios = [...scenarios];
+    newScenarios[scenarioIndex].choices[choiceIndex] = {
+      ...newScenarios[scenarioIndex].choices[choiceIndex],
+      [field]: value
+    };
+    setScenarios(newScenarios);
+    onUpdate('scenarios', newScenarios);
+  };
+
+  const removeChoice = (scenarioIndex: number, choiceIndex: number) => {
+    const newScenarios = [...scenarios];
+    newScenarios[scenarioIndex].choices.splice(choiceIndex, 1);
+    setScenarios(newScenarios);
+    onUpdate('scenarios', newScenarios);
+  };
+
+  const removeScenario = (index: number) => {
+    const newScenarios = scenarios.filter((_: any, i: number) => i !== index);
+    setScenarios(newScenarios);
+    onUpdate('scenarios', newScenarios);
+  };
+
+  const removeVariable = (index: number) => {
+    const newVariables = variables.filter((_: any, i: number) => i !== index);
+    setVariables(newVariables);
+    onUpdate('variables', newVariables);
+  };
+
+  const handleSimulationTypeChange = (newType: string) => {
+    setSimulationType(newType);
+    onUpdate('simulationType', newType);
+  };
+
   return (
-    <div className="text-center py-8 text-gray-500">
-      <Zap className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-      <p>Simulation editor: Custom interactive simulations</p>
-      <p className="text-sm mt-2">Will include custom logic, variables, and interaction configuration</p>
+    <div className="space-y-6">
+      {/* Instructions */}
+      {showInstructions && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <div className="flex items-start justify-between">
+            <div className="flex">
+              <Zap className="w-5 h-5 text-purple-600 mr-2 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-purple-800 mb-1">How Simulations Work</h4>
+                <ul className="text-sm text-purple-700 space-y-1">
+                  <li>• Choose a simulation type that fits your learning objectives</li>
+                  <li>• Set up variables to track student progress and outcomes</li>
+                  <li>• Create scenarios with branching choices and consequences</li>
+                  <li>• Students interact with realistic situations and see results</li>
+                </ul>
+              </div>
+            </div>
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowInstructions(false);
+              }}
+              size="sm"
+              variant="outline"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Simulation Type Selection */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <h4 className="font-medium text-school-primary-blue mb-4">Simulation Type</h4>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {simulationTypes.map((type) => (
+            <button
+              key={type.value}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleSimulationTypeChange(type.value);
+              }}
+              className={`p-4 rounded-lg border-2 transition-all text-left ${
+                simulationType === type.value
+                  ? 'border-purple-500 bg-purple-50'
+                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center mb-2">
+                <Zap className={`w-5 h-5 mr-2 ${
+                  simulationType === type.value ? 'text-purple-600' : 'text-gray-500'
+                }`} />
+                <span className={`font-medium ${
+                  simulationType === type.value ? 'text-purple-800' : 'text-gray-700'
+                }`}>
+                  {type.label}
+                </span>
+              </div>
+              <p className="text-xs text-gray-600">{type.description}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Variables Section */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="font-medium text-school-primary-blue">Simulation Variables</h4>
+          <Button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              addVariable();
+            }}
+            size="sm"
+            variant="outline"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add Variable
+          </Button>
+        </div>
+
+        {variables.length === 0 ? (
+          <div className="text-center py-6 text-gray-500">
+            <Settings className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+            <p className="mb-3">No variables defined</p>
+            <p className="text-sm text-gray-600 mb-4">Variables track values like score, health, budget, etc.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {variables.map((variable: any, index: number) => (
+              <div key={variable.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Variable Name
+                    </label>
+                    <input
+                      type="text"
+                      value={variable.name}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        updateVariable(index, 'name', e.target.value);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                      placeholder="e.g., score, health"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Type
+                    </label>
+                    <select
+                      value={variable.type}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        updateVariable(index, 'type', e.target.value);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                    >
+                      <option value="number">Number</option>
+                      <option value="text">Text</option>
+                      <option value="boolean">True/False</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Initial Value
+                    </label>
+                    <input
+                      type={variable.type === 'number' ? 'number' : 'text'}
+                      value={variable.initialValue}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        const value = variable.type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value;
+                        updateVariable(index, 'initialValue', value);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                    />
+                  </div>
+
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        removeVariable(index);
+                      }}
+                      size="sm"
+                      variant="outline"
+                      className="text-red-600 hover:bg-red-50"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Scenarios Section */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="font-medium text-school-primary-blue">Simulation Scenarios</h4>
+          <Button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              addScenario();
+            }}
+            size="sm"
+            variant="outline"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add Scenario
+          </Button>
+        </div>
+
+        {scenarios.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <Zap className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+            <p className="mb-4">No scenarios created yet</p>
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                addScenario();
+              }}
+              className="bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create First Scenario
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {scenarios.map((scenario: any, scenarioIndex: number) => (
+              <div key={scenario.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="flex items-start justify-between mb-4">
+                  <h5 className="font-medium text-gray-900">Scenario {scenarioIndex + 1}</h5>
+                  <Button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      removeScenario(scenarioIndex);
+                    }}
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600 hover:bg-red-50"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Scenario Title
+                    </label>
+                    <input
+                      type="text"
+                      value={scenario.title}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        updateScenario(scenarioIndex, 'title', e.target.value);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+                      placeholder="Scenario title"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Points Awarded
+                    </label>
+                    <input
+                      type="number"
+                      value={scenario.points || 0}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        updateScenario(scenarioIndex, 'points', parseInt(e.target.value) || 0);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Scenario Description
+                  </label>
+                  <textarea
+                    value={scenario.description}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      updateScenario(scenarioIndex, 'description', e.target.value);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue h-20 resize-none"
+                    placeholder="Describe the situation or problem..."
+                  />
+                </div>
+
+                {/* Choices */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Choices ({scenario.choices?.length || 0})
+                    </label>
+                    <Button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        addChoice(scenarioIndex);
+                      }}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Plus className="w-3 h-3 mr-1" />
+                      Add Choice
+                    </Button>
+                  </div>
+
+                  {scenario.choices && scenario.choices.length > 0 ? (
+                    <div className="space-y-2">
+                      {scenario.choices.map((choice: any, choiceIndex: number) => (
+                        <div key={choice.id} className="bg-white border border-gray-200 rounded p-3">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1 mr-3">
+                              <input
+                                type="text"
+                                value={choice.text}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  updateChoice(scenarioIndex, choiceIndex, 'text', e.target.value);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                placeholder={`Choice ${choiceIndex + 1} text`}
+                              />
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  id={`correct-${scenarioIndex}-${choiceIndex}`}
+                                  checked={choice.isCorrect || false}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    updateChoice(scenarioIndex, choiceIndex, 'isCorrect', e.target.checked);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="mr-1"
+                                />
+                                <label htmlFor={`correct-${scenarioIndex}-${choiceIndex}`} className="text-xs text-gray-600">
+                                  Correct
+                                </label>
+                              </div>
+                              
+                              <Button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  removeChoice(scenarioIndex, choiceIndex);
+                                }}
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 p-1"
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          <input
+                            type="text"
+                            value={choice.consequence || ''}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              updateChoice(scenarioIndex, choiceIndex, 'consequence', e.target.value);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                            placeholder="What happens after this choice..."
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-gray-500 text-sm">
+                      No choices added yet. Add choices for students to select from.
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id={`endpoint-${scenarioIndex}`}
+                    checked={scenario.isEndpoint || false}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      updateScenario(scenarioIndex, 'isEndpoint', e.target.checked);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="mr-2"
+                  />
+                  <label htmlFor={`endpoint-${scenarioIndex}`} className="text-sm text-gray-700">
+                    This is an ending scenario (no further choices)
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Preview */}
+      {scenarios.length > 0 && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <h4 className="font-medium text-school-primary-blue mb-3">Simulation Preview</h4>
+          
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <Zap className="w-5 h-5 text-purple-600 mr-2" />
+                <span className="font-medium text-gray-900">
+                  {simulationTypes.find(t => t.value === simulationType)?.label}
+                </span>
+              </div>
+              <div className="text-sm text-gray-600">
+                {scenarios.length} scenario{scenarios.length !== 1 ? 's' : ''} • {variables.length} variable{variables.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+
+            {variables.length > 0 && (
+              <div className="mb-4">
+                <h5 className="text-sm font-medium text-gray-700 mb-2">Variables:</h5>
+                <div className="flex flex-wrap gap-2">
+                  {variables.map((variable: any) => (
+                    <span key={variable.id} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                      {variable.name}: {variable.initialValue}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {scenarios.slice(0, 3).map((scenario: any, index: number) => (
+                <div key={scenario.id} className="border border-gray-200 rounded p-3">
+                  <div className="font-medium text-sm text-gray-900">{scenario.title || `Scenario ${index + 1}`}</div>
+                  <div className="text-xs text-gray-600 mt-1">{scenario.choices?.length || 0} choices available</div>
+                </div>
+              ))}
+              {scenarios.length > 3 && (
+                <div className="text-center text-sm text-gray-500">
+                  +{scenarios.length - 3} more scenarios...
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-3 text-xs text-gray-600">
+            <p>💡 <strong>Note:</strong> Students will progress through scenarios based on their choices and see how variables change.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+
+
+// Placeholder editors for other types
