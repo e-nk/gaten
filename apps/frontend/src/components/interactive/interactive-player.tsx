@@ -15,7 +15,7 @@ import {
 	Calendar,
 	Zap,
 	XCircle,
-	CirclePlus
+	CirclePlus,	
 } from "lucide-react";
 
 interface InteractivePlayerProps {
@@ -661,10 +661,54 @@ function HotspotRenderer({ content, responses, onUpdate }: any) {
   );
 }
 
-// Placeholder renderers for other interactive types
 function SequenceRenderer({ content, responses, onUpdate }: any) {
-  const items = content.items || [];
-  const [currentOrder, setCurrentOrder] = useState(responses.order || items.map((item: any) => item.id));
+  const originalItems = content.items || [];
+  const [currentOrder, setCurrentOrder] = useState(() => {
+    // If there's a saved response, use it; otherwise shuffle the items
+    if (responses.order && responses.order.length === originalItems.length) {
+      return responses.order;
+    }
+    // Shuffle items for initial display
+    const shuffled = [...originalItems].sort(() => Math.random() - 0.5);
+    return shuffled.map((item: any) => item.id);
+  });
+
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const getItemById = (id: string) => originalItems.find((item: any) => item.id === id);
+
+  const handleDragStart = (itemId: string) => {
+    setDraggedItem(itemId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    
+    if (!draggedItem) return;
+
+    const currentIndex = currentOrder.indexOf(draggedItem);
+    if (currentIndex === -1) return;
+
+    const newOrder = [...currentOrder];
+    newOrder.splice(currentIndex, 1);
+    newOrder.splice(targetIndex, 0, draggedItem);
+    
+    setCurrentOrder(newOrder);
+    onUpdate({ ...responses, order: newOrder });
+    
+    setDraggedItem(null);
+    setDragOverIndex(null);
+  };
 
   const moveItem = (fromIndex: number, toIndex: number) => {
     const newOrder = [...currentOrder];
@@ -674,7 +718,29 @@ function SequenceRenderer({ content, responses, onUpdate }: any) {
     onUpdate({ ...responses, order: newOrder });
   };
 
-  const getItemById = (id: string) => items.find((item: any) => item.id === id);
+  const resetSequence = () => {
+    const shuffled = [...originalItems].sort(() => Math.random() - 0.5);
+    const newOrder = shuffled.map((item: any) => item.id);
+    setCurrentOrder(newOrder);
+    onUpdate({ ...responses, order: newOrder });
+  };
+
+  const checkIfCorrect = () => {
+    return currentOrder.every((itemId: string, index: number) => {
+      const item = getItemById(itemId);
+      return item && item.order === index;
+    });
+  };
+
+  const getCorrectPositions = () => {
+    return currentOrder.filter((itemId: string, index: number) => {
+      const item = getItemById(itemId);
+      return item && item.order === index;
+    }).length;
+  };
+
+  const isCorrect = checkIfCorrect();
+  const correctPositions = getCorrectPositions();
 
   return (
     <div className="space-y-6">
@@ -682,45 +748,123 @@ function SequenceRenderer({ content, responses, onUpdate }: any) {
         <h3 className="text-lg font-semibold text-school-primary-blue mb-2">
           Sequence Activity
         </h3>
-        <p className="text-gray-600">Arrange the items in the correct order</p>
+        <p className="text-gray-600">Drag the items to arrange them in the correct order</p>
       </div>
 
+      {/* Progress Indicator */}
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-gray-700">Progress</span>
+          <span className="text-sm text-gray-600">
+            {correctPositions} of {originalItems.length} correct
+          </span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div 
+            className={`h-2 rounded-full transition-all duration-300 ${
+              isCorrect ? 'bg-green-500' : 'bg-blue-500'
+            }`}
+            style={{ width: `${(correctPositions / originalItems.length) * 100}%` }}
+          ></div>
+        </div>
+        {isCorrect && (
+          <div className="flex items-center mt-2 text-green-600">
+            <CheckCircle className="w-4 h-4 mr-1" />
+            <span className="text-sm font-medium">Perfect sequence! Ready to submit.</span>
+          </div>
+        )}
+      </div>
+
+      {/* Sequence Items */}
       <div className="max-w-2xl mx-auto">
         <div className="space-y-3">
           {currentOrder.map((itemId: string, index: number) => {
             const item = getItemById(itemId);
             if (!item) return null;
             
+            const isInCorrectPosition = item.order === index;
+            const isDragging = draggedItem === itemId;
+            const isDropTarget = dragOverIndex === index;
+            
             return (
               <div
                 key={itemId}
-                className="bg-white border border-gray-300 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
+                className={`relative transition-all duration-200 ${
+                  isDragging ? 'opacity-50 scale-95' : ''
+                } ${
+                  isDropTarget ? 'transform translate-y-1' : ''
+                }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <span className="w-8 h-8 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-sm font-medium mr-3">
-                      {index + 1}
-                    </span>
-                    <span className="font-medium">{item.text}</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <Button
-                      onClick={() => moveItem(index, Math.max(0, index - 1))}
-                      disabled={index === 0}
-                      size="sm"
-                      variant="outline"
-                    >
-                      ↑
-                    </Button>
-                    <Button
-                      onClick={() => moveItem(index, Math.min(currentOrder.length - 1, index + 1))}
-                      disabled={index === currentOrder.length - 1}
-                      size="sm"
-                      variant="outline"
-                    >
-                      ↓
-                    </Button>
+                {/* Drop zone indicator */}
+                {isDropTarget && (
+                  <div className="absolute -top-2 left-0 right-0 h-1 bg-blue-500 rounded-full"></div>
+                )}
+                
+                <div
+                  draggable
+                  onDragStart={() => handleDragStart(itemId)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, index)}
+                  className={`bg-white border-2 rounded-lg p-4 shadow-sm transition-all cursor-move hover:shadow-md ${
+                    isInCorrectPosition 
+                      ? 'border-green-300 bg-green-50' 
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center flex-1">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium mr-3 ${
+                        isInCorrectPosition 
+                          ? 'bg-green-100 text-green-600' 
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {index + 1}
+                      </div>
+                      
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">{item.text}</div>
+                        {item.description && (
+                          <div className="text-sm text-gray-600 mt-1">{item.description}</div>
+                        )}
+                      </div>
+                      
+                      {isInCorrectPosition && (
+                        <CheckCircle className="w-5 h-5 text-green-500 ml-3" />
+                      )}
+                    </div>
+                    
+                    {/* Manual controls */}
+                    <div className="flex flex-col gap-1 ml-4">
+                      <Button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          moveItem(index, Math.max(0, index - 1));
+                        }}
+                        disabled={index === 0}
+                        size="sm"
+                        variant="outline"
+                        className="w-6 h-6 p-0"
+                      >
+                        ↑
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          moveItem(index, Math.min(currentOrder.length - 1, index + 1));
+                        }}
+                        disabled={index === currentOrder.length - 1}
+                        size="sm"
+                        variant="outline"
+                        className="w-6 h-6 p-0"
+                      >
+                        ↓
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -728,9 +872,38 @@ function SequenceRenderer({ content, responses, onUpdate }: any) {
           })}
         </div>
       </div>
+
+      {/* Controls */}
+      <div className="flex justify-center">
+        <Button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            resetSequence();
+          }}
+          variant="outline"
+          className="flex items-center"
+        >
+          <RotateCcw className="w-4 h-4 mr-2" />
+          Shuffle Again
+        </Button>
+      </div>
+
+      {/* Instructions */}
+      <div className="text-center text-sm text-gray-600 space-y-1">
+        <p>💡 <strong>How to use:</strong></p>
+        <p>• Drag items up or down to reorder them</p>
+        <p>• Use the ↑ ↓ buttons for precise control</p>
+        <p>• Green highlighting shows correct positions</p>
+        <p>• Get all items in the right order to complete the activity</p>
+      </div>
     </div>
   );
 }
+
+
+// Placeholder renderers for other interactive types
 
 function MatchingRenderer({ content, responses, onUpdate }: any) {
   const leftItems = content.leftItems || [];

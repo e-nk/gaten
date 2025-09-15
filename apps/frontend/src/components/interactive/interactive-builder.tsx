@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Plus, X, Settings, Eye, Move, Target, List, Calendar, Zap, Globe, Upload, CirclePlus } from "lucide-react";
+import { CheckCircle, Plus, X, Settings, Eye, Move, Target, List, Calendar, Zap, Globe, Upload, CirclePlus, RotateCcw } from "lucide-react";
 
 interface InteractiveBuilderProps {
   onSave: (interactiveData: any) => void;
@@ -1106,18 +1106,342 @@ function HotspotEditor({ content, onUpdate }: { content: any; onUpdate: (field: 
   );
 }
 
-// Placeholder editors for other types
 
 function SequenceEditor({ content, onUpdate }: { content: any; onUpdate: (field: string, value: any) => void }) {
+  const [items, setItems] = useState(content.items || []);
+  const [showInstructions, setShowInstructions] = useState(true);
+
+  const addItem = () => {
+    const newItem = {
+      id: Date.now(),
+      text: '',
+      order: items.length, // Correct order position
+      description: ''
+    };
+    const newItems = [...items, newItem];
+    setItems(newItems);
+    onUpdate('items', newItems);
+  };
+
+  const updateItem = (index: number, field: string, value: any) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setItems(newItems);
+    onUpdate('items', newItems);
+  };
+
+  const removeItem = (index: number) => {
+    const newItems = items.filter((_: any, i: number) => i !== index);
+    // Update order values to be sequential
+    const reorderedItems = newItems.map((item: any, i: number) => ({
+      ...item,
+      order: i
+    }));
+    setItems(reorderedItems);
+    onUpdate('items', reorderedItems);
+  };
+
+  const moveItem = (fromIndex: number, toIndex: number) => {
+    const newItems = [...items];
+    const [movedItem] = newItems.splice(fromIndex, 1);
+    newItems.splice(toIndex, 0, movedItem);
+    
+    // Update order values
+    const reorderedItems = newItems.map((item: any, i: number) => ({
+      ...item,
+      order: i
+    }));
+    
+    setItems(reorderedItems);
+    onUpdate('items', reorderedItems);
+  };
+
+  const shuffleItems = () => {
+    const shuffled = [...items].sort(() => Math.random() - 0.5);
+    const shuffledWithOrder = shuffled.map((item: any, i: number) => ({
+      ...item,
+      // Keep original order value for correct sequence
+    }));
+    setItems(shuffledWithOrder);
+    onUpdate('items', shuffledWithOrder);
+  };
+
   return (
-    <div className="text-center py-8 text-gray-500">
-      <List className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-      <p>Sequence editor: Define items to be arranged in order</p>
-      <p className="text-sm mt-2">Will include item management and correct sequence configuration</p>
+    <div className="space-y-6">
+      {/* Instructions */}
+      {showInstructions && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start justify-between">
+            <div className="flex">
+              <List className="w-5 h-5 text-blue-600 mr-2 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-blue-800 mb-1">How Sequence Activities Work</h4>
+                <ul className="text-sm text-blue-700 space-y-1">
+                  <li>• Add items that students need to arrange in correct order</li>
+                  <li>• The order you create them here is the correct sequence</li>
+                  <li>• Students will see them shuffled and need to drag them into correct order</li>
+                  <li>• You can reorder items here by using the up/down arrows</li>
+                </ul>
+              </div>
+            </div>
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowInstructions(false);
+              }}
+              size="sm"
+              variant="outline"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Items Management */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="font-medium text-school-primary-blue">Sequence Items</h4>
+          <div className="flex items-center gap-2">
+            {items.length > 1 && (
+              <Button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  shuffleItems();
+                }}
+                size="sm"
+                variant="outline"
+              >
+                <RotateCcw className="w-4 h-4 mr-1" />
+                Shuffle
+              </Button>
+            )}
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                addItem();
+              }}
+              size="sm"
+              variant="outline"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Add Item
+            </Button>
+          </div>
+        </div>
+
+        {items.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <List className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+            <p className="mb-4">No sequence items yet</p>
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                addItem();
+              }}
+              className="bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add First Item
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {items.map((item: any, index: number) => (
+              <div
+                key={item.id}
+                className="bg-white border border-gray-300 rounded-lg p-4 shadow-sm"
+              >
+                <div className="flex items-start gap-4">
+                  {/* Order Number */}
+                  <div className="flex flex-col items-center">
+                    <div className="w-8 h-8 bg-school-primary-blue text-white rounded-full flex items-center justify-center text-sm font-medium">
+                      {index + 1}
+                    </div>
+                    <div className="flex flex-col mt-2 gap-1">
+                      <Button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          moveItem(index, Math.max(0, index - 1));
+                        }}
+                        disabled={index === 0}
+                        size="sm"
+                        variant="outline"
+                        className="w-6 h-6 p-0"
+                      >
+                        ↑
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          moveItem(index, Math.min(items.length - 1, index + 1));
+                        }}
+                        disabled={index === items.length - 1}
+                        size="sm"
+                        variant="outline"
+                        className="w-6 h-6 p-0"
+                      >
+                        ↓
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Item Content */}
+                  <div className="flex-1 space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Item Text *
+                      </label>
+                      <input
+                        type="text"
+                        value={item.text}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          updateItem(index, 'text', e.target.value);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+                        placeholder={`Item ${index + 1} text`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Description (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={item.description || ''}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          updateItem(index, 'description', e.target.value);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+                        placeholder="Additional context or description"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Remove Button */}
+                  <Button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      removeItem(index);
+                    }}
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600 hover:bg-red-50"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Preview */}
+      {items.length > 0 && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <h4 className="font-medium text-school-primary-blue mb-3">Preview (Correct Order)</h4>
+          <div className="space-y-2">
+            {items.map((item: any, index: number) => (
+              <div
+                key={item.id}
+                className="bg-white border border-gray-200 rounded p-3 flex items-center"
+              >
+                <span className="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-sm font-medium mr-3">
+                  {index + 1}
+                </span>
+                <div className="flex-1">
+                  <div className="font-medium">{item.text}</div>
+                  {item.description && (
+                    <div className="text-sm text-gray-600">{item.description}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="mt-3 text-xs text-gray-600">
+            <p>💡 <strong>Note:</strong> Students will see these items in random order and need to arrange them like this.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Activity Settings */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <h4 className="font-medium text-school-primary-blue mb-3">Activity Settings</h4>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Scoring Method
+            </label>
+            <select
+              value={content.scoringMethod || 'partial'}
+              onChange={(e) => {
+                e.stopPropagation();
+                onUpdate('scoringMethod', e.target.value);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+            >
+              <option value="partial">Partial Credit (points per correct position)</option>
+              <option value="exact">All or Nothing (perfect sequence required)</option>
+              <option value="adjacent">Adjacent Pairs (points for correct neighbors)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Show Feedback
+            </label>
+            <select
+              value={content.showFeedback !== false ? 'true' : 'false'}
+              onChange={(e) => {
+                e.stopPropagation();
+                onUpdate('showFeedback', e.target.value === 'true');
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+            >
+              <option value="true">Show correct positions after submission</option>
+              <option value="false">No feedback (just score)</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-3 text-xs text-gray-600">
+          <p><strong>Scoring Methods:</strong></p>
+          <ul className="list-disc list-inside space-y-1 mt-1">
+            <li><strong>Partial Credit:</strong> Students get points for each item in the correct position</li>
+            <li><strong>All or Nothing:</strong> Students must get the entire sequence perfect to earn points</li>
+            <li><strong>Adjacent Pairs:</strong> Students get points for each pair of items in correct relative order</li>
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
 
+// Placeholder editors for other types
 function MatchingEditor({ content, onUpdate }: { content: any; onUpdate: (field: string, value: any) => void }) {
   return (
     <div className="text-center py-8 text-gray-500">

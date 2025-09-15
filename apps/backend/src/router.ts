@@ -139,18 +139,48 @@ function calculateHotspotScore(content: any, responses: any): number {
 }
 
 function calculateSequenceScore(content: any, responses: any): number {
-  const correctOrder = content.items || [];
+  const items = content.items || [];
   const userOrder = responses.order || [];
+  const scoringMethod = content.scoringMethod || 'partial';
   
-  let correctCount = 0;
-  
-  correctOrder.forEach((item: any, index: number) => {
-    if (userOrder[index] === item.id) {
-      correctCount++;
-    }
-  });
-  
-  return correctOrder.length > 0 ? Math.round((correctCount / correctOrder.length) * 100) : 0;
+  if (items.length === 0 || userOrder.length !== items.length) {
+    return 0;
+  }
+
+  switch (scoringMethod) {
+    case 'exact':
+      // All or nothing - must be perfect
+      const isExact = userOrder.every((itemId: string, index: number) => {
+        const item = items.find((i: any) => i.id === itemId);
+        return item && item.order === index;
+      });
+      return isExact ? 100 : 0;
+      
+    case 'adjacent':
+      // Points for correct adjacent pairs
+      let adjacentScore = 0;
+      for (let i = 0; i < userOrder.length - 1; i++) {
+        const currentItem = items.find((item: any) => item.id === userOrder[i]);
+        const nextItem = items.find((item: any) => item.id === userOrder[i + 1]);
+        
+        if (currentItem && nextItem && currentItem.order === nextItem.order - 1) {
+          adjacentScore++;
+        }
+      }
+      return items.length > 1 ? Math.round((adjacentScore / (items.length - 1)) * 100) : 100;
+      
+    case 'partial':
+    default:
+      // Partial credit for correct positions
+      let correctPositions = 0;
+      userOrder.forEach((itemId: string, index: number) => {
+        const item = items.find((i: any) => i.id === itemId);
+        if (item && item.order === index) {
+          correctPositions++;
+        }
+      });
+      return Math.round((correctPositions / items.length) * 100);
+  }
 }
 
 function calculateMatchingScore(content: any, responses: any): number {
