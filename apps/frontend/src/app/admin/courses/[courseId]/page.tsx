@@ -7,6 +7,7 @@ import { Navbar } from "@/components/navigation/navbar";
 import { AdminGuard } from "@/components/auth/admin-guard";
 import { VideoUpload } from "@/components/upload/video-upload";
 import { QuizBuilder } from "@/components/quiz/quiz-builder";
+import { AssignmentBuilder } from "@/components/assignment/assignment-builder";
 import ReactPlayer from 'react-player';
 import { trpc } from "@/trpc/provider";
 import { useSession } from "next-auth/react";
@@ -20,7 +21,8 @@ import {
   HelpCircle,
   Edit,
   Trash2,
-  GripVertical
+  GripVertical,
+	CheckCircle
 } from "lucide-react";
 
 function CourseContentPage() {
@@ -45,6 +47,7 @@ function CourseContentPage() {
 		videoUrl: '',
 		videoDuration: 0,
 		quizData: null as any,
+		assignmentData: null as any,
 	});
   // tRPC queries
   const { data: course } = trpc.getAdminCourses.useQuery(
@@ -79,26 +82,34 @@ function CourseContentPage() {
 		onSuccess: async (createdLesson) => {
 			console.log('=== LESSON CREATION SUCCESS ===');
 			console.log('Created lesson:', createdLesson);
-			console.log('Lesson type:', createdLesson.type);
-			console.log('Lesson ID:', createdLesson.id);
 			
-			// If it's a quiz lesson and has quiz data, create the quiz
+			// Handle quiz creation
 			if (lessonFormData.type === 'QUIZ' && lessonFormData.quizData) {
-				console.log('=== CREATING QUIZ ===');
-				console.log('Quiz data to send:', lessonFormData.quizData);
-				console.log('Lesson ID for quiz:', createdLesson.id);
-				
 				try {
-					const quizResult = await createQuizMutation.mutateAsync({
+					await createQuizMutation.mutateAsync({
 						...lessonFormData.quizData,
 						lessonId: createdLesson.id,
 						creatorId: session?.user?.id || '',
 						userRole: session?.user?.role || '',
 					});
-					console.log('Quiz creation result:', quizResult);
 				} catch (error) {
 					console.error('Quiz creation failed:', error);
-					alert('Lesson created but quiz creation failed. Please try again.');
+					alert('Lesson created but quiz creation failed.');
+				}
+			}
+			
+			// Handle assignment creation
+			if (lessonFormData.type === 'ASSIGNMENT' && lessonFormData.assignmentData) {
+				try {
+					await createAssignmentMutation.mutateAsync({
+						...lessonFormData.assignmentData,
+						lessonId: createdLesson.id,
+						creatorId: session?.user?.id || '',
+						userRole: session?.user?.role || '',
+					});
+				} catch (error) {
+					console.error('Assignment creation failed:', error);
+					alert('Lesson created but assignment creation failed.');
 				}
 			}
 			
@@ -112,16 +123,15 @@ function CourseContentPage() {
 				estimatedDuration: 0, 
 				videoUrl: '', 
 				videoDuration: 0,
-				quizData: null
+				quizData: null,
+				assignmentData: null
 			});
-		},
-		onError: (error) => {
-			console.error('Lesson creation failed:', error);
-			alert(error.message);
 		}
 	});
 
 	const createQuizMutation = trpc.createQuiz.useMutation();
+	const createAssignmentMutation = trpc.createAssignment.useMutation();
+
 
 
   const handleCreateModule = (e: React.FormEvent) => {
@@ -165,6 +175,23 @@ const handleCreateLesson = (e: React.FormEvent) => {
 			lessonData.videoUrl = lessonFormData.videoUrl;
 			lessonData.videoDuration = lessonFormData.videoDuration;
 		}
+		
+		else if (lessonFormData.type === 'ASSIGNMENT') {
+				if (!lessonFormData.assignmentData) {
+				alert('Please configure the assignment before creating the lesson.');
+				return;
+			}
+			
+			if (!lessonFormData.assignmentData.title || !lessonFormData.assignmentData.instructions) {
+				alert('Please fill in all required assignment fields (title and instructions).');
+				return;
+			}
+			
+			if (lessonFormData.assignmentData.allowedFileTypes.length === 0) {
+				alert('Please select at least one allowed file type for the assignment.');
+				return;
+			}
+		}
 
 		else if (lessonFormData.type === 'QUIZ') {
 			if (!lessonFormData.quizData || !lessonFormData.quizData.questions || lessonFormData.quizData.questions.length === 0) {
@@ -176,6 +203,7 @@ const handleCreateLesson = (e: React.FormEvent) => {
       alert('Please enter a quiz title.');
       return;
     }
+
 		 console.log('Data being sent to backend:', lessonData);
   	createLessonMutation.mutate(lessonData);
   }
@@ -185,6 +213,7 @@ const handleCreateLesson = (e: React.FormEvent) => {
 		console.log('Quiz Data:', lessonFormData.quizData);
 		console.log('Data being sent to backend:', lessonData);
 		console.log('Quiz Questions:', lessonFormData.quizData?.questions || 'No questions');
+		console.log('Assignment Data:', lessonFormData.assignmentData);
   	console.log('================================');
 		console.log('Video URL in form state:', lessonFormData.videoUrl);
 		console.log('Video URL being sent:', lessonData.videoUrl);
@@ -457,6 +486,58 @@ const handleCreateLesson = (e: React.FormEvent) => {
 									</div>
 								)}
 
+								{lessonFormData.type === 'ASSIGNMENT' && (
+									<div>
+										<label className="block text-sm font-medium text-school-primary-blue mb-2">
+											Assignment Content
+										</label>
+										
+										{/* Assignment Status Indicator - Same style as quiz */}
+										<div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+											<div className="flex items-center justify-between">
+												<div>
+													<p className="text-sm font-medium text-purple-800">
+														Assignment Status: {lessonFormData.assignmentData ? 'Ready' : 'Not configured'}
+													</p>
+													{lessonFormData.assignmentData && (
+														<p className="text-xs text-purple-600">
+															Due: {lessonFormData.assignmentData.dueDate ? new Date(lessonFormData.assignmentData.dueDate).toLocaleDateString() : 'No due date'} | 
+															Max Points: {lessonFormData.assignmentData.maxPoints}
+														</p>
+													)}
+												</div>
+												{lessonFormData.assignmentData && (
+													<div className="text-green-600">
+														<CheckCircle className="w-5 h-5" />
+													</div>
+												)}
+											</div>
+										</div>
+										
+										<div className="border border-school-primary-paledogwood rounded-lg p-4 max-h-96 overflow-y-auto">
+											<AssignmentBuilder
+												onSave={(assignmentData) => {
+													console.log('=== ASSIGNMENT BUILDER ON SAVE ===');
+													console.log('Received assignment data:', assignmentData);
+													setLessonFormData(prev => {
+														const updated = { ...prev, assignmentData };
+														console.log('Updated lesson form data:', updated);
+														return updated;
+													});
+													
+													// No alert - the beautiful feedback is handled in the builder itself
+												}}
+												initialData={lessonFormData.assignmentData}
+											/>
+										</div>
+										
+										{/* Instructions */}
+										<div className="mt-2 text-xs text-gray-600">
+											<p>💡 <strong>Tip:</strong> Configure your assignment above, then click "Save Assignment" before creating the lesson.</p>
+										</div>
+									</div>
+								)}
+
 								<div>
 									<label className="block text-sm font-medium text-school-primary-blue mb-1">
 										Estimated Duration (minutes)
@@ -492,7 +573,8 @@ const handleCreateLesson = (e: React.FormEvent) => {
 												estimatedDuration: 0, 
 												videoUrl: '', 
 												videoDuration: 0,
-												quizData: null
+												quizData: null,
+												assignmentData: null
 											});
 										}}
 										className="flex-1"

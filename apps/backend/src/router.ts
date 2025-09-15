@@ -749,7 +749,8 @@ getLessonContent: publicProcedure
               orderBy: { order: 'asc' }
             }
           }
-        }
+        },
+        assignments: true,
       }
     });
 
@@ -1149,6 +1150,247 @@ getUserCourseProgress: publicProcedure
 
     return lessonProgress;
   }),	
+
+	// Add these assignment procedures
+createAssignment: publicProcedure
+  .input(z.object({
+    title: z.string().min(1, 'Title is required'),
+    description: z.string().optional(),
+    instructions: z.string().min(1, 'Instructions are required'),
+    lessonId: z.string(),
+    dueDate: z.string().optional(), // ISO date string
+    maxPoints: z.number().int().min(1).default(100),
+    allowLateSubmission: z.boolean().default(false),
+    maxFileSize: z.number().int().min(1).max(100).default(10), // MB
+    allowedFileTypes: z.array(z.string()).default(['pdf', 'doc', 'docx']),
+    creatorId: z.string(),
+    userRole: z.string(),
+  }))
+  .mutation(async ({ input }) => {
+    if (input.userRole !== 'ADMIN') {
+      throw new Error('Admin access required');
+    }
+
+    const database = getDb();
+    
+    // Verify user owns the lesson
+    const lesson = await database.lesson.findFirst({
+      where: { id: input.lessonId },
+      include: {
+        module: {
+          include: {
+            course: { select: { creatorId: true } }
+          }
+        }
+      }
+    });
+
+    if (!lesson || lesson.module.course.creatorId !== input.creatorId) {
+      throw new Error('Lesson not found or access denied');
+    }
+
+    const { creatorId, userRole, ...assignmentData } = input;
+
+    console.log('=== BACKEND CREATE ASSIGNMENT DEBUG ===');
+    console.log('Assignment data received:', assignmentData);
+
+    const assignment = await database.assignment.create({
+      data: {
+        ...assignmentData,
+        dueDate: assignmentData.dueDate ? new Date(assignmentData.dueDate) : null,
+      }
+    });
+
+    console.log('Assignment created successfully:', assignment);
+    console.log('=========================================');
+
+    return assignment;
+  }),
+
+getAssignment: publicProcedure
+  .input(z.object({
+    assignmentId: z.string(),
+    userId: z.string().optional(),
+  }))
+  .query(async ({ input }) => {
+    const database = getDb();
+    
+    const assignment = await database.assignment.findUnique({
+      where: { id: input.assignmentId },
+      include: {
+        lesson: {
+          include: {
+            module: {
+              include: {
+                course: true
+              }
+            }
+          }
+        },
+        submissions: input.userId ? {
+          where: { userId: input.userId }
+        } : false
+      }
+    });
+
+    if (!assignment) {
+      throw new Error('Assignment not found');
+    }
+
+    // Check if user is enrolled (if userId provided)
+    if (input.userId) {
+      const enrollment = await database.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId: input.userId,
+            courseId: assignment.lesson.module.course.id
+          }
+        }
+      });
+
+      if (!enrollment) {
+        throw new Error('Not enrolled in this course');
+      }
+    }
+
+    return assignment;
+  }),
+
+submitAssignment: publicProcedure
+  .input(z.object({
+    assignmentId: z.string(),
+    userId: z.string(),
+    content: z.string().optional(), // Text submission
+    fileUrl: z.string().optional(), // File submission URL
+    fileName: z.string().optional(), // Original file name
+  }))
+  .mutation(async ({ input }) => {
+    const database = getDb();
+    
+    // Get assignment details
+    const assignment = await database.assignment.findUnique({
+      where: { id: input.assignmentId },
+      include: {
+        lesson: {
+          include: {
+            module: {
+              include: {
+                course: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!assignment) {
+      throw new Error('Assignment not found');
+    }
+
+    // Check enrollment
+    const enrollment = await database.enrollment.findUnique({
+      where: {
+        userId_courseId: {
+          userId: input.userId,
+          courseId: assignment.lesson.module.course.id
+        }
+      }
+    });
+
+    if (!enrollment) {
+      throw new Error('Not enrolled in this course');
+    }
+
+    // Check if submission already exists
+    const existingSubmission = await database.assignmentSubmission.findUnique({
+      where: {
+        userId_assignmentId: {
+          userId: input.userId,
+          assignmentId: input.assignmentId
+        }
+      }
+    });
+
+    // Check if due date has passed (if not allowing late submissions)
+    const now = new Date();
+    const isLate = assignment.dueDate && now > assignment.dueDate;
+    
+    if (isLate && !assignment.allowLateSubmission) {
+      throw new Error('Assignment deadline has passed and late submissions are not allowed');
+    }
+
+    const submissionData = {
+      userId: input.userId,
+      assignmentId: input.assignmentId,
+      content: input.content,
+      fileUrl: input.fileUrl,
+      fileName: input.fileName,
+      isLate: isLate || false,
+      status: 'SUBMITTED' as const,
+      submittedAt: new Date(),
+    };
+
+    let submission;
+    if (existingSubmission) {
+      // Update existing submission
+      submission = await database.assignmentSubmission.update({
+        where: { id: existingSubmission.id },
+        data: submissionData
+      });
+    } else {
+      // Create new submission
+      submission = await database.assignmentSubmission.create({
+        data: submissionData
+      });
+    }
+
+    return submission;
+  }),
+
+getUserAssignmentSubmission: publicProcedure
+  .input(z.object({
+    assignmentId: z.string(),
+    userId: z.string(),
+  }))
+  .query(async ({ input }) => {
+    const database = getDb();
+    
+    const submission = await database.assignmentSubmission.findUnique({
+      where: {
+        userId_assignmentId: {
+          userId: input.userId,
+          assignmentId: input.assignmentId
+        }
+      },
+      include: {
+        assignment: true
+      }
+    });
+
+    return submission;
+  }),
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 });
 
 

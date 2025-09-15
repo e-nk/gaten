@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/navigation/navbar";
 import { QuizPlayer } from "@/components/quiz/quiz-player";
 import { QuizAnswerReview } from "@/components/quiz/quiz-answer-review";
+import { AssignmentPlayer } from "@/components/assignment/assignment-player";
 import { trpc } from "@/trpc/provider";
 import ReactPlayer from 'react-player';
 import { 
@@ -26,6 +27,7 @@ import {
   ChevronDown
 } from "lucide-react";
 import { QuizResults } from "@/components/quiz/quiz-results";
+import { AssignmentSubmissionResult } from "@/components/assignment/assignment-submission-result";
 
 export default function CoursePlayerPage() {
   const params = useParams();
@@ -34,6 +36,8 @@ export default function CoursePlayerPage() {
   const courseId = params.courseId as string;
 	const [quizResults, setQuizResults] = useState<any>(null);
 	const [showQuizResults, setShowQuizResults] = useState(false);
+	const [showAssignmentResults, setShowAssignmentResults] = useState(false);
+	const [assignmentSubmissionResult, setAssignmentSubmissionResult] = useState<any>(null);
 
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -48,11 +52,7 @@ export default function CoursePlayerPage() {
     userId: session?.user?.id
   });
 
-	// Add this debug query
-	const { data: debugLessonData } = trpc.debugLesson.useQuery(
-		{ lessonId: selectedLessonId! },
-		{ enabled: !!selectedLessonId }
-	);
+
 
   const { data: lessonData } = trpc.getLessonContent.useQuery(
     {
@@ -101,6 +101,26 @@ export default function CoursePlayerPage() {
 		}
 	);
 
+	const { data: assignmentData } = trpc.getAssignment.useQuery(
+		{
+			assignmentId: lessonData?.lesson.assignments?.[0]?.id || '',
+			userId: session?.user?.id
+		},
+		{
+			enabled: !!lessonData?.lesson.assignments?.[0]?.id && !!session?.user?.id
+		}
+	);
+
+	const { data: assignmentSubmission } = trpc.getUserAssignmentSubmission.useQuery(
+		{
+			assignmentId: lessonData?.lesson.assignments?.[0]?.id || '',
+			userId: session?.user?.id || ''
+		},
+		{
+			enabled: !!lessonData?.lesson.assignments?.[0]?.id && !!session?.user?.id
+		}
+	);
+
 	
 
   // tRPC mutations
@@ -125,6 +145,25 @@ export default function CoursePlayerPage() {
 		},
 		onError: (error) => {
 			alert('Failed to submit quiz: ' + error.message);
+		}
+	});
+
+	const submitAssignmentMutation = trpc.submitAssignment.useMutation({
+		onSuccess: (result) => {
+			// Show beautiful results instead of alert
+			setAssignmentSubmissionResult(result);
+			setShowAssignmentResults(true);
+			
+			// Mark lesson complete
+			if (!isLessonCompleted(selectedLessonId!)) {
+				handleMarkComplete();
+			}
+			
+			// Refresh assignment data
+			window.location.reload();
+		},
+		onError: (error) => {
+			alert('Failed to submit assignment: ' + error.message);
 		}
 	});
 
@@ -720,10 +759,49 @@ export default function CoursePlayerPage() {
 									</div>
 								)}
 
+								{lessonData.lesson.type === 'ASSIGNMENT' && (
+									<div className="bg-white border border-gray-200 rounded-lg p-6">
+										{showAssignmentResults && assignmentSubmissionResult && assignmentData ? (
+											<AssignmentSubmissionResult
+												assignment={assignmentData}
+												submission={assignmentSubmissionResult}
+												onClose={() => {
+													setShowAssignmentResults(false);
+													setAssignmentSubmissionResult(null);
+												}}
+											/>
+										) : assignmentData ? (
+											<AssignmentPlayer
+												assignment={assignmentData}
+												submission={assignmentSubmission}
+												isSubmitting={submitAssignmentMutation.isPending}
+												onSubmit={(submissionData) => {
+													submitAssignmentMutation.mutate({
+														assignmentId: assignmentData.id,
+														userId: session?.user?.id || '',
+														...submissionData
+													});
+												}}
+											/>
+										) : (
+											<div className="text-center py-12">
+												<div className="w-16 h-16 bg-school-primary-nyanza rounded-full flex items-center justify-center mx-auto mb-4">
+													<PenTool className="w-8 h-8 text-school-primary-blue" />
+												</div>
+												<h3 className="text-lg font-medium text-school-primary-blue mb-2">
+													No assignment available
+												</h3>
+												<p className="text-gray-600">
+													This assignment lesson hasn't been set up yet.
+												</p>
+											</div>
+										)}
+									</div>
+								)}
+
 
                 {/* Other Content Types */}
-                {(lessonData.lesson.type === 'ASSIGNMENT' || 
-                  lessonData.lesson.type === 'INTERACTIVE') && (
+                {(lessonData.lesson.type === 'INTERACTIVE') && (
                   <div className="bg-white border border-gray-200 rounded-lg p-6 text-center">
                     <div className="text-gray-500">
                       {getLessonIcon(lessonData.lesson.type)}
