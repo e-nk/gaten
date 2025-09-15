@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState } from "react";
 import { Navbar } from "@/components/navigation/navbar";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/trpc/provider";
@@ -16,7 +16,7 @@ export default function CoursesPage() {
   });
 
   // Prepare the query input - only include non-empty values
-  const queryInput = useMemo(() => {
+  const queryInput = (() => {
     const input: any = {};
     
     if (filters.search && filters.search.trim() !== '') {
@@ -32,22 +32,22 @@ export default function CoursesPage() {
     }
     
     return input;
-  }, [filters]);
+  })();
 
   // tRPC queries
   const { data: courses, isLoading, error } = trpc.getCourses.useQuery(queryInput);
   const { data: categories } = trpc.getCategories.useQuery();
-
-  // Debug logging
-  useEffect(() => {
-    if (error) {
-      console.error('getCourses error:', error);
-    }
-  }, [error]);
+  
+  // Get user's enrollments to check enrollment status
+  const { data: enrollments, refetch: refetchEnrollments } = trpc.getMyEnrollments.useQuery(
+    { userId: session?.user?.id || '' },
+    { enabled: !!session?.user?.id }
+  );
 
   // tRPC mutations
   const enrollMutation = trpc.enrollInCourse.useMutation({
     onSuccess: () => {
+      refetchEnrollments();
       alert('Successfully enrolled in course!');
     },
     onError: (error) => {
@@ -78,6 +78,11 @@ export default function CoursesPage() {
       case 'ADVANCED': return 'bg-red-100 text-red-600';
       default: return 'bg-gray-100 text-gray-600';
     }
+  };
+
+  // Check if user is enrolled in a specific course
+  const isEnrolledInCourse = (courseId: string) => {
+    return enrollments?.some(enrollment => enrollment.course.id === courseId) || false;
   };
 
   // Show error state
@@ -161,18 +166,6 @@ export default function CoursesPage() {
           </div>
         </div>
 
-        {/* Debug Info (remove in production) */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
-            <p className="text-sm">
-              <strong>Debug:</strong> Query input: {JSON.stringify(queryInput)}
-            </p>
-            <p className="text-sm">
-              <strong>Courses found:</strong> {courses?.length || 0}
-            </p>
-          </div>
-        )}
-
         {/* Loading State */}
         {isLoading && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -192,74 +185,100 @@ export default function CoursesPage() {
         {/* Course Grid */}
         {!isLoading && courses && courses.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {courses.map(course => (
-              <div key={course.id} className="bg-white rounded-lg border border-school-primary-paledogwood overflow-hidden hover:shadow-lg transition-shadow">
-                {/* Course Thumbnail */}
-                <div className="h-48 bg-gradient-to-br from-school-primary-blue to-school-primary-paledogwood relative">
-                  <div className="absolute top-4 left-4">
-                    <span className={`px-2 py-1 text-xs rounded font-medium ${getLevelColor(course.level)}`}>
-                      {course.level.charAt(0) + course.level.slice(1).toLowerCase()}
-                    </span>
-                  </div>
-                  {course.category && (
-                    <div className="absolute top-4 right-4">
-                      <span className="px-2 py-1 bg-white text-school-primary-blue text-xs rounded">
-                        {course.category.name}
+            {courses.map(course => {
+              const isEnrolled = isEnrolledInCourse(course.id);
+              
+              return (
+                <div key={course.id} className="bg-white rounded-lg border border-school-primary-paledogwood overflow-hidden hover:shadow-lg transition-shadow">
+                  {/* Course Thumbnail */}
+                  <div className="h-48 bg-gradient-to-br from-school-primary-blue to-school-primary-paledogwood relative">
+                    <div className="absolute top-4 left-4">
+                      <span className={`px-2 py-1 text-xs rounded font-medium ${getLevelColor(course.level)}`}>
+                        {course.level.charAt(0) + course.level.slice(1).toLowerCase()}
                       </span>
                     </div>
-                  )}
-                </div>
-                
-                <div className="p-6">
-                  {/* Course Title and Description */}
-                  <h3 className="font-semibold text-school-primary-blue mb-2">
-                    {course.title}
-                  </h3>
-                  
-                  <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                    {course.description || 'No description available'}
-                  </p>
-                  
-                  {/* Course Stats */}
-                  <div className="flex items-center justify-between mb-4 text-sm text-gray-500">
-                    <div className="flex items-center">
-                      <Users className="w-4 h-4 mr-1" />
-                      <span>{course._count.enrollments} students</span>
-                    </div>
-                    <div className="flex items-center">
-                      <BookOpen className="w-4 h-4 mr-1" />
-                      <span>{course._count.modules} modules</span>
-                    </div>
-                    {course._count.reviews > 0 && (
-                      <div className="flex items-center">
-                        <Star className="w-4 h-4 mr-1 text-yellow-400 fill-current" />
-                        <span>{course.averageRating.toFixed(1)}</span>
+                    {course.category && (
+                      <div className="absolute top-4 right-4">
+                        <span className="px-2 py-1 bg-white text-school-primary-blue text-xs rounded">
+                          {course.category.name}
+                        </span>
+                      </div>
+                    )}
+                    {isEnrolled && (
+                      <div className="absolute bottom-4 left-4">
+                        <span className="px-2 py-1 bg-green-600 text-white text-xs rounded">
+                          Enrolled
+                        </span>
                       </div>
                     )}
                   </div>
-
-                  {/* Instructor */}
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-sm text-gray-600">
-                      By {course.creator.name}
-                    </div>
-                    <div className="text-lg font-bold text-school-primary-blue">
-                      Free
-                    </div>
-                  </div>
                   
-                  {/* Enroll Button */}
-                  <Button
-                    onClick={() => handleEnroll(course.id)}
-                    disabled={enrollMutation.isPending || !session}
-                    className="w-full bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
-                  >
-                    {enrollMutation.isPending ? 'Enrolling...' : 
-                     !session ? 'Sign in to Enroll' : 'Enroll Now'}
-                  </Button>
+                  <div className="p-6">
+                    {/* Course Title and Description */}
+                    <h3 className="font-semibold text-school-primary-blue mb-2">
+                      {course.title}
+                    </h3>
+                    
+                    <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+                      {course.description || 'No description available'}
+                    </p>
+                    
+                    {/* Course Stats */}
+                    <div className="flex items-center justify-between mb-4 text-sm text-gray-500">
+                      <div className="flex items-center">
+                        <Users className="w-4 h-4 mr-1" />
+                        <span>{course._count.enrollments} students</span>
+                      </div>
+                      <div className="flex items-center">
+                        <BookOpen className="w-4 h-4 mr-1" />
+                        <span>{course._count.modules} modules</span>
+                      </div>
+                      {course._count.reviews > 0 && (
+                        <div className="flex items-center">
+                          <Star className="w-4 h-4 mr-1 text-yellow-400 fill-current" />
+                          <span>{course.averageRating.toFixed(1)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Instructor */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-sm text-gray-600">
+                        By {course.creator.name}
+                      </div>
+                      <div className="text-lg font-bold text-school-primary-blue">
+                        Free
+                      </div>
+                    </div>
+                    
+                    {/* Action Buttons */}
+                    {!session ? (
+                      <Button
+                        onClick={() => window.location.href = '/auth/signin'}
+                        className="w-full bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+                      >
+                        Sign in to Enroll
+                      </Button>
+                    ) : isEnrolled ? (
+                      <Button
+                        onClick={() => window.location.href = `/course/${course.id}`}
+                        className="w-full bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        Continue Learning
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => handleEnroll(course.id)}
+                        disabled={enrollMutation.isPending}
+                        className="w-full bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+                      >
+                        {enrollMutation.isPending ? 'Enrolling...' : 'Enroll Now'}
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

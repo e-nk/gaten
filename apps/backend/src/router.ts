@@ -451,7 +451,7 @@ createLesson: publicProcedure
     order: z.number().int().min(0),
     estimatedDuration: z.number().int().min(0).optional(),
     videoUrl: z.string().optional(),
-    videoDuration: z.number().int().optional(),
+    videoDuration: z.number().optional(), // Remove .int() - allow floats
     creatorId: z.string(),
     userRole: z.string(),
   }))
@@ -459,6 +459,13 @@ createLesson: publicProcedure
     if (input.userRole !== 'ADMIN') {
       throw new Error('Admin access required');
     }
+
+    // DEBUG: Log what we received
+    console.log('=== BACKEND CREATE LESSON DEBUG ===');
+    console.log('Received input:', input);
+    console.log('Video URL received:', input.videoUrl);
+    console.log('Video Duration received:', input.videoDuration);
+    console.log('===================================');
 
     const database = getDb();
     
@@ -476,22 +483,32 @@ createLesson: publicProcedure
       throw new Error('Module not found or access denied');
     }
 
+    const lessonData = {
+      title: input.title,
+      description: input.description,
+      content: input.content,
+      type: input.type,
+      moduleId: input.moduleId,
+      order: input.order,
+      estimatedDuration: input.estimatedDuration,
+      videoUrl: input.videoUrl,
+      videoDuration: input.videoDuration ? Math.floor(input.videoDuration) : null, // Convert to int for database
+    };
+
+    // DEBUG: Log what we're saving to database
+    console.log('Data being saved to database:', lessonData);
+
     const lesson = await database.lesson.create({
-      data: {
-        title: input.title,
-        description: input.description,
-        content: input.content,
-        type: input.type,
-        moduleId: input.moduleId,
-        order: input.order,
-        estimatedDuration: input.estimatedDuration,
-        videoUrl: input.videoUrl,
-        videoDuration: input.videoDuration,
-      }
+      data: lessonData
     });
+
+    console.log('Created lesson:', lesson);
+    console.log('==============================');
 
     return lesson;
   }),
+
+
 
 getModuleLessons: publicProcedure
   .input(z.object({

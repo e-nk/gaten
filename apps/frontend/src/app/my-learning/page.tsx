@@ -156,10 +156,13 @@ export default function MyLearningPage() {
                   </div>
 
                   {/* Action Button */}
-                  <Button className="w-full bg-school-primary-blue hover:bg-school-primary-blue/90 text-white">
-                    <Play className="w-4 h-4 mr-2" />
-                    {enrollment.completedAt ? 'Review Course' : 'Continue Learning'}
-                  </Button>
+                 <Button 
+										onClick={() => window.location.href = `/course/${enrollment.course.id}`}
+										className="w-full bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+									>
+										<Play className="w-4 h-4 mr-2" />
+										{enrollment.completedAt ? 'Review Course' : 'Continue Learning'}
+									</Button>
                 </div>
               ))}
             </div>

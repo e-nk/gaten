@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/navigation/navbar";
 import { AdminGuard } from "@/components/auth/admin-guard";
+import { VideoUpload } from "@/components/upload/video-upload";
+import ReactPlayer from 'react-player';
 import { trpc } from "@/trpc/provider";
 import { useSession } from "next-auth/react";
 import { 
@@ -33,12 +35,14 @@ function CourseContentPage() {
     description: '',
   });
   const [lessonFormData, setLessonFormData] = useState({
-    title: '',
-    description: '',
-    type: 'TEXT' as const,
-    content: '',
-    estimatedDuration: 0,
-  });
+		title: '',
+		description: '',
+		type: 'TEXT' as const,
+		content: '',
+		estimatedDuration: 0,
+		videoUrl: '',
+		videoDuration: 0,
+	});
 
   // tRPC queries
   const { data: course } = trpc.getAdminCourses.useQuery(
@@ -70,15 +74,24 @@ function CourseContentPage() {
   });
 
   const createLessonMutation = trpc.createLesson.useMutation({
-    onSuccess: () => {
-      refetchModules();
-      setShowLessonForm(null);
-      setLessonFormData({ title: '', description: '', type: 'TEXT', content: '', estimatedDuration: 0 });
-    },
-    onError: (error) => {
-      alert(error.message);
-    }
-  });
+		onSuccess: () => {
+			refetchModules();
+			setShowLessonForm(null);
+			// Reset form data properly
+			setLessonFormData({ 
+				title: '', 
+				description: '', 
+				type: 'TEXT', 
+				content: '', 
+				estimatedDuration: 0, 
+				videoUrl: '', 
+				videoDuration: 0 
+			});
+		},
+		onError: (error) => {
+			alert(error.message);
+		}
+	});
 
   const handleCreateModule = (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,22 +108,42 @@ function CourseContentPage() {
     });
   };
 
-  const handleCreateLesson = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!session?.user?.id || !session?.user?.role || !showLessonForm) return;
+const handleCreateLesson = (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!session?.user?.id || !session?.user?.role || !showLessonForm) return;
 
-    const module = modules?.find(m => m.id === showLessonForm);
-    const nextOrder = module ? module.lessons.length : 0;
+		const module = modules?.find(m => m.id === showLessonForm);
+		const nextOrder = module ? module.lessons.length : 0;
 
-    createLessonMutation.mutate({
-      ...lessonFormData,
-      moduleId: showLessonForm,
-      order: nextOrder,
-      creatorId: session.user.id,
-      userRole: session.user.role,
-    });
-  };
+		// Prepare lesson data with video information
+		const lessonData: any = {
+			title: lessonFormData.title,
+			description: lessonFormData.description,
+			type: lessonFormData.type,
+			moduleId: showLessonForm,
+			order: nextOrder,
+			estimatedDuration: lessonFormData.estimatedDuration,
+			creatorId: session.user.id,
+			userRole: session.user.role,
+		};
 
+		// Add content based on lesson type
+		if (lessonFormData.type === 'TEXT') {
+			lessonData.content = lessonFormData.content;
+		} else if (lessonFormData.type === 'VIDEO') {
+			lessonData.videoUrl = lessonFormData.videoUrl;
+			lessonData.videoDuration = lessonFormData.videoDuration;
+		}
+
+		console.log('=== LESSON FORM DATA DEBUG ===');
+		console.log('Form State:', lessonFormData);
+		console.log('Data being sent to backend:', lessonData);
+		console.log('Video URL in form state:', lessonFormData.videoUrl);
+		console.log('Video URL being sent:', lessonData.videoUrl);
+		console.log('================================');
+
+		createLessonMutation.mutate(lessonData);
+	};
   const getLessonIcon = (type: string) => {
     switch (type) {
       case 'VIDEO': return <Play className="w-4 h-4" />;
@@ -275,91 +308,137 @@ function CourseContentPage() {
 
         {/* Create Lesson Form */}
         {showLessonForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h2 className="text-xl font-bold text-school-primary-blue mb-4">
-                Create New Lesson
-              </h2>
-              
-              <form onSubmit={handleCreateLesson} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-school-primary-blue mb-1">
-                    Lesson Title *
-                  </label>
-                  <input
-                    type="text"
-                    value={lessonFormData.title}
-                    onChange={(e) => setLessonFormData(prev => ({ ...prev, title: e.target.value }))}
-                    className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
-                    required
-                    placeholder="Enter lesson title"
-                  />
-                </div>
+					<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+						<div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+							<h2 className="text-xl font-bold text-school-primary-blue mb-4">
+								Create New Lesson
+							</h2>
+							
+							<form onSubmit={handleCreateLesson} className="space-y-4">
+								<div>
+									<label className="block text-sm font-medium text-school-primary-blue mb-1">
+										Lesson Title *
+									</label>
+									<input
+										type="text"
+										value={lessonFormData.title}
+										onChange={(e) => setLessonFormData(prev => ({ ...prev, title: e.target.value }))}
+										className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+										required
+										placeholder="Enter lesson title"
+									/>
+								</div>
 
-                <div>
-                  <label className="block text-sm font-medium text-school-primary-blue mb-1">
-                    Lesson Type
-                  </label>
-                  <select
-                    value={lessonFormData.type}
-                    onChange={(e) => setLessonFormData(prev => ({ ...prev, type: e.target.value as any }))}
-                    className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
-                  >
-                    <option value="TEXT">Text Content</option>
-                    <option value="VIDEO">Video</option>
-                    <option value="QUIZ">Quiz</option>
-                    <option value="ASSIGNMENT">Assignment</option>
-                    <option value="INTERACTIVE">Interactive</option>
-                  </select>
-                </div>
+								<div>
+									<label className="block text-sm font-medium text-school-primary-blue mb-1">
+										Lesson Type
+									</label>
+									<select
+										value={lessonFormData.type}
+										onChange={(e) => setLessonFormData(prev => ({ ...prev, type: e.target.value as any }))}
+										className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+									>
+										<option value="TEXT">Text Content</option>
+										<option value="VIDEO">Video</option>
+										<option value="QUIZ">Quiz</option>
+										<option value="ASSIGNMENT">Assignment</option>
+										<option value="INTERACTIVE">Interactive</option>
+									</select>
+								</div>
 
-                <div>
-                  <label className="block text-sm font-medium text-school-primary-blue mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={lessonFormData.description}
-                    onChange={(e) => setLessonFormData(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue h-20 resize-none"
-                    placeholder="Describe this lesson"
-                  />
-                </div>
+								<div>
+									<label className="block text-sm font-medium text-school-primary-blue mb-1">
+										Description
+									</label>
+									<textarea
+										value={lessonFormData.description}
+										onChange={(e) => setLessonFormData(prev => ({ ...prev, description: e.target.value }))}
+										className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue h-20 resize-none"
+										placeholder="Describe this lesson"
+									/>
+								</div>
 
-                <div>
-                  <label className="block text-sm font-medium text-school-primary-blue mb-1">
-                    Estimated Duration (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={lessonFormData.estimatedDuration}
-                    onChange={(e) => setLessonFormData(prev => ({ ...prev, estimatedDuration: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
-                    placeholder="0"
-                  />
-                </div>
+								{/* Content based on lesson type */}
+								{lessonFormData.type === 'TEXT' && (
+									<div>
+										<label className="block text-sm font-medium text-school-primary-blue mb-1">
+											Content
+										</label>
+										<textarea
+											value={lessonFormData.content}
+											onChange={(e) => setLessonFormData(prev => ({ ...prev, content: e.target.value }))}
+											className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue h-32 resize-none"
+											placeholder="Enter lesson content (supports basic HTML)"
+										/>
+									</div>
+								)}
 
-                <div className="flex space-x-3 pt-4">
-                  <Button
-                    type="submit"
-                    disabled={createLessonMutation.isPending}
-                    className="flex-1 bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
-                  >
-                    {createLessonMutation.isPending ? 'Creating...' : 'Create Lesson'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowLessonForm(null)}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+								{lessonFormData.type === 'VIDEO' && (
+									<div>
+										<label className="block text-sm font-medium text-school-primary-blue mb-2">
+											Video Content
+										</label>
+										<VideoUpload
+											currentVideoUrl={lessonFormData.videoUrl}
+											onVideoUpload={(videoData) => {
+												setLessonFormData(prev => ({
+													...prev,
+													videoUrl: videoData.url,
+													videoDuration: videoData.duration,
+													estimatedDuration: Math.ceil(videoData.duration / 60) // Convert to minutes
+												}));
+											}}
+										/>
+									</div>
+								)}
+
+								<div>
+									<label className="block text-sm font-medium text-school-primary-blue mb-1">
+										Estimated Duration (minutes)
+									</label>
+									<input
+										type="number"
+										min="0"
+										value={lessonFormData.estimatedDuration}
+										onChange={(e) => setLessonFormData(prev => ({ ...prev, estimatedDuration: parseInt(e.target.value) || 0 }))}
+										className="w-full px-3 py-2 border border-school-primary-paledogwood rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+										placeholder="0"
+									/>
+								</div>
+
+								<div className="flex space-x-3 pt-4">
+									<Button
+										type="submit"
+										disabled={createLessonMutation.isPending}
+										className="flex-1 bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+									>
+										{createLessonMutation.isPending ? 'Creating...' : 'Create Lesson'}
+									</Button>
+									<Button
+										type="button"
+										variant="outline"
+										onClick={(e) => {
+											e.preventDefault(); 
+											setShowLessonForm(null);
+											setLessonFormData({ 
+												title: '', 
+												description: '', 
+												type: 'TEXT', 
+												content: '', 
+												estimatedDuration: 0, 
+												videoUrl: '', 
+												videoDuration: 0 
+											});
+										}}
+										className="flex-1"
+									>
+										Cancel
+									</Button>
+								</div>
+							</form>
+						</div>
+					</div>
+				)}
 
         {/* Modules and Lessons */}
         <div className="space-y-6">
