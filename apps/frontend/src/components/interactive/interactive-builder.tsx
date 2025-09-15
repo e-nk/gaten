@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Plus, X, Settings, Eye, Move, Target, List, Calendar, Zap, Globe } from "lucide-react";
+import { CheckCircle, Plus, X, Settings, Eye, Move, Target, List, Calendar, Zap, Globe, Upload, CirclePlus } from "lucide-react";
 
 interface InteractiveBuilderProps {
   onSave: (interactiveData: any) => void;
@@ -642,16 +642,471 @@ function DragDropEditor({ content, onUpdate }: { content: any; onUpdate: (field:
   );
 }
 
-// Placeholder editors for other types
+
+// Replace the placeholder HotspotEditor with this complete implementation:
 function HotspotEditor({ content, onUpdate }: { content: any; onUpdate: (field: string, value: any) => void }) {
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [hotspots, setHotspots] = useState(content.hotspots || []);
+  const [selectedHotspot, setSelectedHotspot] = useState<number | null>(null);
+  const [isAddingHotspot, setIsAddingHotspot] = useState(false);
+
+  const imageUrl = content.imageUrl || '';
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    const file = e.target.files?.[0];
+    if (file) {
+      console.log('File selected:', file.name, file.type, file.size);
+      setImageFile(file);
+      handleImageUpload(file);
+    }
+  };
+
+  const handleImageUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      alert('Image size must be less than 10MB');
+      return;
+    }
+
+    console.log('Starting upload for:', file.name);
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      console.log('FormData created, starting XHR...');
+
+      const xhr = new XMLHttpRequest();
+      
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const progress = Math.round((e.loaded / e.total) * 100);
+          console.log('Upload progress:', progress + '%');
+          setUploadProgress(progress);
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        console.log('Upload completed, status:', xhr.status);
+        if (xhr.status === 200) {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            console.log('Upload response:', response);
+            onUpdate('imageUrl', response.url);
+            onUpdate('imageWidth', response.width);
+            onUpdate('imageHeight', response.height);
+            console.log('Image URL updated:', response.url);
+          } catch (parseError) {
+            console.error('Failed to parse response:', parseError);
+            throw new Error('Invalid response from server');
+          }
+        } else {
+          console.error('Upload failed with status:', xhr.status, xhr.responseText);
+          throw new Error(`Upload failed: ${xhr.status}`);
+        }
+        setIsUploading(false);
+        setUploadProgress(0);
+        setImageFile(null);
+      });
+
+      xhr.addEventListener('error', (e) => {
+        console.error('XHR error:', e);
+        alert('Upload failed. Please check your connection and try again.');
+        setIsUploading(false);
+        setUploadProgress(0);
+      });
+
+      xhr.open('POST', 'http://localhost:4000/api/upload/hotspot-image');
+      xhr.send(formData);
+
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to upload image. Please try again.');
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isAddingHotspot) return;
+
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+    const newHotspot = {
+      id: Date.now(),
+      x: Math.round(x * 10) / 10, // Round to 1 decimal place
+      y: Math.round(y * 10) / 10,
+      width: 8, // Smaller default size
+      height: 8,
+      label: `Hotspot ${hotspots.length + 1}`,
+      feedback: '',
+      isCorrect: true
+    };
+
+    const newHotspots = [...hotspots, newHotspot];
+    setHotspots(newHotspots);
+    onUpdate('hotspots', newHotspots);
+    setSelectedHotspot(hotspots.length);
+    setIsAddingHotspot(false);
+  };
+
+  const updateHotspot = (index: number, field: string, value: any) => {
+    const newHotspots = [...hotspots];
+    newHotspots[index] = { ...newHotspots[index], [field]: value };
+    setHotspots(newHotspots);
+    onUpdate('hotspots', newHotspots);
+  };
+
+  const removeHotspot = (index: number) => {
+    const newHotspots = hotspots.filter((_: any, i: number) => i !== index);
+    setHotspots(newHotspots);
+    onUpdate('hotspots', newHotspots);
+    setSelectedHotspot(null);
+  };
+
   return (
-    <div className="text-center py-8 text-gray-500">
-      <Target className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-      <p>Hotspot editor: Upload image and define clickable areas</p>
-      <p className="text-sm mt-2">Will include image upload, coordinate mapping, and feedback configuration</p>
+    <div className="space-y-6">
+      {/* Image Upload */}
+      <div>
+        <h4 className="font-medium text-school-primary-blue mb-3">Upload Image</h4>
+        
+        {!imageUrl ? (
+          <div>
+            {!isUploading ? (
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
+                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <div className="mb-4">
+                  <p className="text-gray-600 mb-2">Choose an image for the hotspot activity</p>
+                  <p className="text-sm text-gray-500">Supports JPG, PNG, GIF (max 10MB)</p>
+                </div>
+                
+                <Button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Choose file button clicked');
+                    fileInputRef.current?.click();
+                  }}
+                  className="bg-school-primary-blue hover:bg-school-primary-blue/90 text-white"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Choose Image File
+                </Button>
+                
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  onClick={(e) => e.stopPropagation()}
+                  className="hidden"
+                />
+              </div>
+            ) : (
+              <div className="border border-gray-300 rounded-lg p-8 text-center">
+                <div className="w-12 h-12 bg-school-primary-blue rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Upload className="w-6 h-6 text-white animate-pulse" />
+                </div>
+                <p className="text-school-primary-blue font-medium mb-2">Uploading image...</p>
+                <p className="text-sm text-gray-600 mb-4">{uploadProgress}% complete</p>
+                <div className="w-full bg-gray-200 rounded-full h-2 max-w-xs mx-auto">
+                  <div 
+                    className="bg-school-primary-blue h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Image Display with Hotspots */}
+            <div className="relative border border-gray-300 rounded-lg overflow-hidden">
+              <div
+                className={`relative ${isAddingHotspot ? 'cursor-crosshair' : 'cursor-default'}`}
+                onClick={handleImageClick}
+              >
+                <img 
+                  src={imageUrl} 
+                  alt="Hotspot activity image"
+                  className="w-full h-auto max-h-96 object-contain"
+                />
+                
+                {/* Render Hotspots with CirclePlus icons */}
+                {hotspots.map((hotspot: any, index: number) => (
+                  <div
+                    key={hotspot.id}
+                    className={`absolute transition-all cursor-pointer ${
+                      selectedHotspot === index
+                        ? 'text-red-500 scale-110'
+                        : 'text-blue-500 hover:text-blue-600 hover:scale-105'
+                    }`}
+                    style={{
+                      left: `${hotspot.x}%`,
+                      top: `${hotspot.y}%`,
+                      transform: 'translate(-50%, -50%)'
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedHotspot(index);
+                    }}
+                  >
+                    <CirclePlus className="w-6 h-6 drop-shadow-lg" />
+                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap">
+                      {index + 1}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Adding Hotspot Overlay */}
+                {isAddingHotspot && (
+                  <div className="absolute inset-0 bg-blue-500 bg-opacity-10 flex items-center justify-center">
+                    <div className="bg-white rounded-lg p-4 shadow-lg">
+                      <Target className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                      <p className="text-school-primary-blue font-medium mb-2">Click on the image to add a hotspot</p>
+                      <Button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsAddingHotspot(false);
+                        }}
+                        size="sm"
+                        variant="outline"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Image Actions */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsAddingHotspot(true);
+                  }}
+                  size="sm"
+                  variant="outline"
+                  disabled={isAddingHotspot}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Hotspot
+                </Button>
+                
+                <span className="text-sm text-gray-600">
+                  {hotspots.length} hotspot{hotspots.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              <Button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onUpdate('imageUrl', '');
+                  setHotspots([]);
+                  onUpdate('hotspots', []);
+                  setSelectedHotspot(null);
+                }}
+                size="sm"
+                variant="outline"
+                className="text-red-600"
+              >
+                <X className="w-4 h-4 mr-1" />
+                Remove Image
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+      {/* Hotspot Configuration */}
+      {hotspots.length > 0 && (
+        <div>
+          <h4 className="font-medium text-school-primary-blue mb-3">Configure Hotspots</h4>
+          
+          <div className="space-y-4">
+            {hotspots.map((hotspot: any, index: number) => (
+              <div
+                key={hotspot.id}
+                className={`p-4 border rounded-lg ${
+                  selectedHotspot === index 
+                    ? 'border-school-primary-blue bg-blue-50' 
+                    : 'border-gray-200'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <h5 className="font-medium text-gray-900">
+                    Hotspot {index + 1}
+                  </h5>
+                  <Button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      removeHotspot(index);
+                    }}
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Label
+                    </label>
+                    <input
+                      type="text"
+                      value={hotspot.label}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        updateHotspot(index, 'label', e.target.value);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue"
+                      placeholder="Hotspot label"
+                    />
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id={`correct-${index}`}
+                      checked={hotspot.isCorrect}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        updateHotspot(index, 'isCorrect', e.target.checked);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mr-2"
+                    />
+                    <label htmlFor={`correct-${index}`} className="text-sm text-gray-700">
+                      This is a correct hotspot
+                    </label>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Feedback
+                    </label>
+                    <textarea
+                      value={hotspot.feedback}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        updateHotspot(index, 'feedback', e.target.value);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-school-primary-blue h-20 resize-none"
+                      placeholder="Feedback shown when this hotspot is clicked"
+                    />
+                  </div>
+
+                  {/* Position and Size Controls */}
+                  <div className="md:col-span-2">
+                    <div className="grid grid-cols-4 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">X (%)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={hotspot.x}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            updateHotspot(index, 'x', parseFloat(e.target.value) || 0);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Y (%)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={hotspot.y}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            updateHotspot(index, 'y', parseFloat(e.target.value) || 0);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Width (%)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="50"
+                          value={hotspot.width}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            updateHotspot(index, 'width', parseFloat(e.target.value) || 10);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Height (%)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="50"
+                          value={hotspot.height}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            updateHotspot(index, 'height', parseFloat(e.target.value) || 10);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {imageUrl && hotspots.length === 0 && (
+        <div className="text-center py-8 text-gray-500">
+          <Target className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+          <p>Click "Add Hotspot" to create clickable areas on your image</p>
+        </div>
+      )}
     </div>
   );
 }
+
+// Placeholder editors for other types
 
 function SequenceEditor({ content, onUpdate }: { content: any; onUpdate: (field: string, value: any) => void }) {
   return (

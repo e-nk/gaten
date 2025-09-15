@@ -13,7 +13,9 @@ import {
   Target,
   Move,
 	Calendar,
-	Zap
+	Zap,
+	XCircle,
+	CirclePlus
 } from "lucide-react";
 
 interface InteractivePlayerProps {
@@ -492,16 +494,43 @@ function DragDropRenderer({ content, responses, onUpdate }: any) {
 
 // Placeholder renderers for other interactive types
 function HotspotRenderer({ content, responses, onUpdate }: any) {
-  const [clicks, setClicks] = useState(responses.clicks || []);
+  const [foundHotspots, setFoundHotspots] = useState<number[]>(responses.foundHotspots || []);
+  const [feedback, setFeedback] = useState<{ message: string; isCorrect: boolean } | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
 
-  const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+  const hotspots = content.hotspots || [];
+  const imageUrl = content.imageUrl;
+
+  const handleHotspotClick = (hotspotIndex: number, e: React.MouseEvent) => {
+    e.stopPropagation();
     
-    const newClicks = [...clicks, { x, y, timestamp: Date.now() }];
-    setClicks(newClicks);
-    onUpdate({ ...responses, clicks: newClicks });
+    if (foundHotspots.includes(hotspotIndex)) {
+      return; // Already found this hotspot
+    }
+
+    const hotspot = hotspots[hotspotIndex];
+    const newFoundHotspots = [...foundHotspots, hotspotIndex];
+    
+    setFoundHotspots(newFoundHotspots);
+    onUpdate({ ...responses, foundHotspots: newFoundHotspots });
+
+    // Show feedback
+    setFeedback({
+      message: hotspot.feedback || (hotspot.isCorrect ? 'Correct!' : 'Try again!'),
+      isCorrect: hotspot.isCorrect
+    });
+    setShowFeedback(true);
+
+    // Hide feedback after 3 seconds
+    setTimeout(() => setShowFeedback(false), 3000);
+  };
+
+  const getCorrectHotspotsFound = () => {
+    return foundHotspots.filter(index => hotspots[index]?.isCorrect).length;
+  };
+
+  const getTotalCorrectHotspots = () => {
+    return hotspots.filter((hotspot: any) => hotspot.isCorrect).length;
   };
 
   return (
@@ -514,29 +543,78 @@ function HotspotRenderer({ content, responses, onUpdate }: any) {
       </div>
 
       <div className="relative max-w-4xl mx-auto">
-        {content.imageUrl ? (
-          <div
-            className="relative cursor-crosshair border border-gray-300 rounded-lg overflow-hidden"
-            onClick={handleImageClick}
-          >
-            <img 
-              src={content.imageUrl} 
-              alt="Interactive hotspot image"
-              className="w-full h-auto"
-            />
-            
-            {/* Show user clicks */}
-            {clicks.map((click: any, index: number) => (
-              <div
-                key={index}
-                className="absolute w-6 h-6 bg-red-500 border-2 border-white rounded-full transform -translate-x-1/2 -translate-y-1/2 animate-pulse"
-                style={{ left: click.x, top: click.y }}
-              >
-                <span className="absolute top-6 left-1/2 transform -translate-x-1/2 text-xs bg-red-500 text-white px-1 rounded">
-                  {index + 1}
-                </span>
+        {imageUrl ? (
+          <div className="relative border border-gray-300 rounded-lg overflow-hidden">
+            <div className="relative">
+              <img 
+                src={imageUrl} 
+                alt="Interactive hotspot image"
+                className="w-full h-auto"
+              />
+              
+              {/* Render Hotspots as Clickable Areas */}
+              {hotspots.map((hotspot: any, index: number) => {
+                const isFound = foundHotspots.includes(index);
+                const isCorrect = hotspot.isCorrect;
+                
+                return (
+                  <div
+                    key={hotspot.id}
+                    className={`absolute transition-all cursor-pointer ${
+                      isFound 
+                        ? isCorrect 
+                          ? 'text-green-500 scale-110' 
+                          : 'text-red-500 scale-110'
+                        : 'text-blue-500 hover:text-blue-600 hover:scale-105 animate-pulse'
+                    }`}
+                    style={{
+                      left: `${hotspot.x}%`,
+                      top: `${hotspot.y}%`,
+                      transform: 'translate(-50%, -50%)'
+                    }}
+                    onClick={(e) => handleHotspotClick(index, e)}
+                  >
+                    {isFound ? (
+                      isCorrect ? (
+                        <CheckCircle className="w-6 h-6 drop-shadow-lg" />
+                      ) : (
+                        <XCircle className="w-6 h-6 drop-shadow-lg" />
+                      )
+                    ) : (
+                      <CirclePlus className="w-6 h-6 drop-shadow-lg" />
+                    )}
+                    
+                    {!isFound && (
+                      <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap">
+                        Click me!
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Feedback Display */}
+            {showFeedback && feedback && (
+              <div className="absolute top-4 right-4">
+                <div
+                  className={`p-3 rounded-lg shadow-lg max-w-xs ${
+                    feedback.isCorrect 
+                      ? 'bg-green-500 text-white' 
+                      : 'bg-red-500 text-white'
+                  }`}
+                >
+                  <div className="flex items-center">
+                    {feedback.isCorrect ? (
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                    ) : (
+                      <XCircle className="w-4 h-4 mr-2" />
+                    )}
+                    <span className="text-sm font-medium">{feedback.message}</span>
+                  </div>
+                </div>
               </div>
-            ))}
+            )}
           </div>
         ) : (
           <div className="bg-gray-100 border border-gray-300 rounded-lg p-12 text-center">
@@ -544,15 +622,46 @@ function HotspotRenderer({ content, responses, onUpdate }: any) {
             <p className="text-gray-500">No image configured for this hotspot activity</p>
           </div>
         )}
-        
-        <div className="mt-4 text-center text-sm text-gray-600">
-          Clicks made: {clicks.length}
+      </div>
+
+      {/* Progress Display */}
+      <div className="text-center space-y-2">
+        <div className="flex items-center justify-center space-x-6 text-sm">
+          <div className="flex items-center">
+            <Target className="w-4 h-4 mr-2 text-gray-500" />
+            <span>Hotspots found: {foundHotspots.length}/{hotspots.length}</span>
+          </div>
+          <div className="flex items-center">
+            <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
+            <span>Correct: {getCorrectHotspotsFound()}/{getTotalCorrectHotspots()}</span>
+          </div>
         </div>
+
+        {/* Progress Bar */}
+        <div className="max-w-md mx-auto">
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-green-500 h-2 rounded-full transition-all duration-300"
+              style={{ 
+                width: `${getTotalCorrectHotspots() > 0 ? (getCorrectHotspotsFound() / getTotalCorrectHotspots()) * 100 : 0}%` 
+              }}
+            ></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Instructions */}
+      <div className="text-center text-sm text-gray-600">
+        <p>Click on the highlighted areas to find all the correct hotspots</p>
+        {getTotalCorrectHotspots() > 0 && (
+          <p className="mt-1">Find all {getTotalCorrectHotspots()} correct hotspot{getTotalCorrectHotspots() !== 1 ? 's' : ''} to complete the activity</p>
+        )}
       </div>
     </div>
   );
 }
 
+// Placeholder renderers for other interactive types
 function SequenceRenderer({ content, responses, onUpdate }: any) {
   const items = content.items || [];
   const [currentOrder, setCurrentOrder] = useState(responses.order || items.map((item: any) => item.id));

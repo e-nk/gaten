@@ -599,19 +599,21 @@ const handleCreateLesson = (e: React.FormEvent) => {
 											</div>
 										</div>
 										
-										<div className="border border-school-primary-paledogwood rounded-lg p-4 max-h-96 overflow-y-auto">
-											<InteractiveBuilder
-												onSave={(interactiveData) => {
-													console.log('=== INTERACTIVE BUILDER ON SAVE ===');
-													console.log('Received interactive data:', interactiveData);
-													setLessonFormData(prev => {
-														const updated = { ...prev, interactiveData };
-														console.log('Updated lesson form data:', updated);
-														return updated;
-													});
-												}}
-												initialData={lessonFormData.interactiveData}
-											/>
+										<div className="border border-school-primary-paledogwood rounded-lg overflow-hidden"> {/* Add overflow-hidden */}
+											<div className="max-h-[600px] overflow-y-auto p-4"> {/* Set specific height and scroll */}
+												<InteractiveBuilder
+													onSave={(interactiveData) => {
+														console.log('=== INTERACTIVE BUILDER ON SAVE ===');
+														console.log('Received interactive data:', interactiveData);
+														setLessonFormData(prev => {
+															const updated = { ...prev, interactiveData };
+															console.log('Updated lesson form data:', updated);
+															return updated;
+														});
+													}}
+													initialData={lessonFormData.interactiveData}
+												/>
+											</div>
 										</div>
 										
 										{/* Instructions */}

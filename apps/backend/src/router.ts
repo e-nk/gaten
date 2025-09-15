@@ -116,21 +116,26 @@ function calculateDragDropScore(content: any, responses: any): number {
 
 function calculateHotspotScore(content: any, responses: any): number {
   const hotspots = content.hotspots || [];
-  const userClicks = responses.clicks || [];
+  const hitHotspots = responses.hitHotspots || [];
+  const clicks = responses.clicks || [];
   
-  let correctCount = 0;
+  // Count correct hotspots found
+  const correctHotspots = hotspots.filter((hotspot: any) => hotspot.isCorrect);
+  const correctHotspotsFound = correctHotspots.filter((_: any, index: number) => 
+    hitHotspots.includes(hotspots.indexOf(correctHotspots[index]))
+  ).length;
   
-  hotspots.forEach((hotspot: any) => {
-    const wasClicked = userClicks.some((click: any) => 
-      isPointInHotspot(click, hotspot)
-    );
-    
-    if (wasClicked) {
-      correctCount++;
-    }
-  });
+  // Count incorrect clicks (clicks that don't hit any correct hotspot)
+  const incorrectClicks = clicks.length - (responses.hitHotspots?.length || 0);
   
-  return hotspots.length > 0 ? Math.round((correctCount / hotspots.length) * 100) : 0;
+  // Calculate base score
+  let score = correctHotspots.length > 0 ? (correctHotspotsFound / correctHotspots.length) * 100 : 0;
+  
+  // Penalty for incorrect clicks (max 20% penalty)
+  const penalty = Math.min(incorrectClicks * 5, 20);
+  score = Math.max(0, score - penalty);
+  
+  return Math.round(score);
 }
 
 function calculateSequenceScore(content: any, responses: any): number {

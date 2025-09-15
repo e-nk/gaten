@@ -48,6 +48,7 @@ export default function CoursePlayerPage() {
 
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+	  const [sidebarCollapsed, setsidebarCollapsed] = useState(true);
   const [videoProgress, setVideoProgress] = useState(0);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
 	const [showAnswerReview, setShowAnswerReview] = useState(false);
@@ -356,7 +357,7 @@ export default function CoursePlayerPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       
-      <div className="flex h-[calc(100vh-64px)]">
+      <div className="flex">
         {/* Enhanced Sidebar with better UX */}
 				<div className={`${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 bg-white border-r border-gray-200 overflow-hidden flex flex-col relative`}>
 					{/* Sidebar Header */}
@@ -556,9 +557,9 @@ export default function CoursePlayerPage() {
 						</div>
 					</div>
           {/* Lesson Content */}
-          <div className="flex-1 p-6 overflow-y-auto">
+          <div className="flex-1 p-4 overflow-y-auto">
             {lessonData ? (
-              <div className="max-w-4xl mx-auto">
+              <div className="max-w-6xl mx-auto">
                 {/* Lesson Description */}
                 {lessonData.lesson.description && (
                   <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">

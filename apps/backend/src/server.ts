@@ -122,6 +122,54 @@ app.post('/api/upload/assignment-file', assignmentUpload.single('file'), async (
 // Serve uploaded assignment files
 app.use('/uploads/assignments', express.static(path.join(__dirname, '../uploads/assignments')));
 
+// Add hotspot image upload endpoint
+app.post('/api/upload/hotspot-image', assignmentUpload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image provided' });
+    }
+
+    // Check if it's an image
+    if (!req.file.mimetype.startsWith('image/')) {
+      return res.status(400).json({ error: 'File must be an image' });
+    }
+
+    // For now, simple file storage (in production, use Cloudinary)
+    const fileName = `hotspot_${Date.now()}_${req.file.originalname}`;
+    const imageUrl = `http://localhost:4000/uploads/hotspots/${fileName}`;
+    
+    // Save file to uploads directory
+    const fs = require('fs');
+    const path = require('path');
+    const uploadDir = path.join(__dirname, '../uploads/hotspots');
+    
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    
+    fs.writeFileSync(path.join(uploadDir, fileName), req.file.buffer);
+    
+    // Get image dimensions (you might want to use a library like sharp for this)
+    res.json({
+      success: true,
+      url: imageUrl,
+      fileName: req.file.originalname,
+      width: 800, // Default width - in production, get actual dimensions
+      height: 600, // Default height
+      size: req.file.size
+    });
+  } catch (error) {
+    console.error('Hotspot image upload error:', error);
+    res.status(500).json({ 
+      error: 'Failed to upload image',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Serve uploaded hotspot images
+app.use('/uploads/hotspots', express.static(path.join(__dirname, '../uploads/hotspots')));
+
 app.use('/trpc', createExpressMiddleware({
   router: appRouter,
   createContext,
