@@ -406,7 +406,7 @@ model InteractiveContent {
   type        InteractiveType
   
   // Content configuration (JSON structure varies by type)
-  config      Json         // Flexible configuration object
+  config      Json?         // Flexible configuration object
   content     Json         // The actual interactive content data
   
   // Settings
